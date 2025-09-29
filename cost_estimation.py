@@ -1,191 +1,261 @@
-import requests
 import streamlit as st
-from typing import Dict, List, Optional
-from datetime import datetime
-from dataclasses import dataclass
+import requests
 import json
+from typing import Dict, List, Optional
+from dataclasses import dataclass
+from datetime import datetime
+import pandas as pd
 from concurrent.futures import ThreadPoolExecutor
 
 @dataclass
-class AWSPriceList:
-    """AWS Price List API Handler"""
-    BASE_URL = "https://pricing.us-east-1.amazonaws.com"
-    
-    @staticmethod
-    def get_services() -> Dict:
-        """Get list of all AWS services"""
-        try:
-            response = requests.get(f"{AWSPriceList.BASE_URL}/offers/v1.0/aws/index.json")
-            if response.status_code == 200:
-                return response.json().get('offers', {})
-            return {}
-        except Exception as e:
-            st.error(f"Error fetching services: {str(e)}")
-            return {}
+class CustomerRequirement:
+    workload_type: str
+    monthly_budget: float
+    performance_tier: str
+    regions: List[str]
+    availability_target: str
+    compliance_needs: List[str]
+    expected_users: int
+    data_volume_gb: float
+    special_requirements: List[str]
 
-    @staticmethod
-    def get_service_pricing(service: str, region: str) -> Dict:
-        """Get pricing data for a service"""
-        try:
-            url = f"{AWSPriceList.BASE_URL}/offers/v1.0/aws/{service}/current/{region}/index.json"
-            response = requests.get(url)
-            if response.status_code == 200:
-                return response.json()
-            return {}
-        except Exception as e:
-            st.error(f"Error fetching {service} pricing: {str(e)}")
-            return {}
+@dataclass
+class ServiceRecommendation:
+    service_name: str
+    configuration: Dict
+    monthly_cost: float
+    justification: str
+    alternatives: List[str]
 
-    @staticmethod
-    def get_regions() -> List[str]:
-        """Get list of AWS regions"""
-        try:
-            response = requests.get(f"{AWSPriceList.BASE_URL}/meta/regions.json")
-            if response.status_code == 200:
-                return list(response.json().keys())
-            return []
-        except Exception as e:
-            st.error(f"Error fetching regions: {str(e)}")
-            return []
+@dataclass
+class CloudPackage:
+    total_monthly_cost: float
+    services: List[ServiceRecommendation]
+    architecture_diagram: str
+    optimization_tips: List[str]
+    compliance_notes: str
 
-class AWSPricingCalculator:
-    """Dynamic AWS Service Pricing Calculator"""
-    
-    def __init__(self):
+class CloudServiceAgent:
+    """Base agent class for cloud service recommendations"""
+    def __init__(self, service_category: str):
+        self.category = service_category
         self.price_list = AWSPriceList()
-        self.services = self.price_list.get_services()
-        self.regions = self.price_list.get_regions()
 
-    def calculate_service_cost(self, service: str, config: Dict, region: str) -> Dict:
-        """Calculate cost for any AWS service"""
-        pricing_data = self.price_list.get_service_pricing(service, region)
-        if not pricing_data:
-            return {"error": f"No pricing data available for {service}"}
+    def recommend(self, requirements: CustomerRequirement) -> List[ServiceRecommendation]:
+        raise NotImplementedError
 
-        monthly_cost = self._process_pricing_data(pricing_data, config)
-        alternatives = self._find_alternatives(service, config)
+class ComputeAgent(CloudServiceAgent):
+    def recommend(self, requirements: CustomerRequirement) -> List[ServiceRecommendation]:
+        if requirements.workload_type == "serverless":
+            return self._recommend_lambda(requirements)
+        return self._recommend_ec2(requirements)
 
-        return {
-            "monthly_cost": monthly_cost,
-            "alternatives": alternatives,
-            "last_updated": datetime.now().isoformat()
+    def _recommend_ec2(self, requirements: CustomerRequirement) -> List[ServiceRecommendation]:
+        instance_types = self._get_suitable_instances(requirements)
+        pricing = self.price_list.get_service_pricing("AmazonEC2", requirements.regions[0])
+        # Implementation details for EC2 recommendation
+
+class StorageAgent(CloudServiceAgent):
+    def recommend(self, requirements: CustomerRequirement) -> List[ServiceRecommendation]:
+        if requirements.data_volume_gb > 1000:
+            return self._recommend_s3(requirements)
+        return self._recommend_ebs(requirements)
+
+class DatabaseAgent(CloudServiceAgent):
+    def recommend(self, requirements: CustomerRequirement) -> List[ServiceRecommendation]:
+        if "High Availability" in requirements.special_requirements:
+            return self._recommend_aurora(requirements)
+        return self._recommend_rds(requirements)
+
+class NetworkingAgent(CloudServiceAgent):
+    def recommend(self, requirements: CustomerRequirement) -> List[ServiceRecommendation]:
+        recommendations = []
+        if "Content Delivery" in requirements.special_requirements:
+            recommendations.extend(self._recommend_cloudfront(requirements))
+        return recommendations
+
+class SecurityAgent(CloudServiceAgent):
+    def recommend(self, requirements: CustomerRequirement) -> List[ServiceRecommendation]:
+        recommendations = []
+        if requirements.compliance_needs:
+            recommendations.extend(self._recommend_security_services(requirements))
+        return recommendations
+
+class CloudPackageBuilder:
+    def __init__(self):
+        self.agents = {
+            "compute": ComputeAgent("compute"),
+            "storage": StorageAgent("storage"),
+            "database": DatabaseAgent("database"),
+            "networking": NetworkingAgent("networking"),
+            "security": SecurityAgent("security")
         }
+        self.price_list = AWSPriceList()
 
-    def _process_pricing_data(self, pricing_data: Dict, config: Dict) -> float:
-        """Process pricing data based on service attributes"""
-        total_cost = 0.0
-        products = pricing_data.get('products', {})
-        terms = pricing_data.get('terms', {}).get('OnDemand', {})
-
-        for product in products.values():
-            if self._matches_configuration(product.get('attributes', {}), config):
-                sku = product.get('sku')
-                for term in terms.values():
-                    if term.get('sku') == sku:
-                        total_cost += self._calculate_price_dimensions(
-                            term.get('priceDimensions', {}),
-                            config
-                        )
-
-        return total_cost
-
-    def _matches_configuration(self, attributes: Dict, config: Dict) -> bool:
-        """Check if product attributes match required configuration"""
-        for key, value in config.items():
-            if key in attributes and str(attributes[key]) != str(value):
-                return False
-        return True
-
-    def _calculate_price_dimensions(self, dimensions: Dict, config: Dict) -> float:
-        """Calculate cost across all price dimensions"""
-        total_cost = 0.0
-        usage_hours = config.get('hours', 730)  # Default to monthly hours
-
-        for dimension in dimensions.values():
-            unit = dimension.get('unit', '')
-            price = float(dimension.get('pricePerUnit', {}).get('USD', 0))
-
-            if 'Hour' in unit:
-                total_cost += price * usage_hours
-            elif 'GB' in unit:
-                total_cost += price * config.get('size_gb', 0)
-            elif 'Requests' in unit:
-                total_cost += price * config.get('requests', 0) / 1000  # Price per 1000 requests
-            else:
-                # Handle other units based on config
-                quantity = config.get(unit.lower(), 1)
-                total_cost += price * quantity
-
-        return total_cost
-
-    def _find_alternatives(self, service: str, config: Dict) -> List[Dict]:
-        """Find alternative services based on workload requirements"""
-        alternatives = []
-        service_category = self._get_service_category(service)
+    def create_package(self, requirements: CustomerRequirement) -> CloudPackage:
+        recommendations = []
         
-        for other_service in self.services:
-            if (other_service != service and 
-                self._get_service_category(other_service) == service_category):
-                alternatives.append({
-                    "service": other_service,
-                    "estimated_savings": self._estimate_savings(service, other_service, config)
-                })
+        # Parallel agent execution
+        with ThreadPoolExecutor() as executor:
+            future_to_agent = {
+                executor.submit(agent.recommend, requirements): name 
+                for name, agent in self.agents.items()
+            }
+            
+            for future in future_to_agent:
+                agent_recommendations = future.result()
+                recommendations.extend(agent_recommendations)
 
-        return sorted(alternatives, key=lambda x: x['estimated_savings'], reverse=True)[:3]
+        # Filter recommendations based on budget
+        filtered_recommendations = self._filter_by_budget(
+            recommendations, 
+            requirements.monthly_budget
+        )
 
-    def _get_service_category(self, service: str) -> str:
-        """Get service category from AWS service metadata"""
-        try:
-            response = requests.get(
-                f"{AWSPriceList.BASE_URL}/offers/v1.0/aws/{service}/current/metadata.json"
+        return CloudPackage(
+            total_monthly_cost=sum(r.monthly_cost for r in filtered_recommendations),
+            services=filtered_recommendations,
+            architecture_diagram=self._generate_architecture_diagram(filtered_recommendations),
+            optimization_tips=self._generate_optimization_tips(filtered_recommendations),
+            compliance_notes=self._generate_compliance_notes(requirements, filtered_recommendations)
+        )
+
+def main():
+    st.set_page_config(page_title="AWS Cloud Package Builder", layout="wide")
+    st.title("🚀 AWS Cloud Package Builder")
+
+    # Get available regions
+    price_list = AWSPriceList()
+    available_regions = price_list.get_regions()
+
+    # Sidebar for requirements
+    st.sidebar.header("Requirements")
+    
+    workload_type = st.sidebar.selectbox(
+        "Workload Type",
+        ["Web Application", "Data Processing", "Machine Learning", "Microservices"]
+    )
+    
+    monthly_budget = st.sidebar.number_input(
+        "Monthly Budget ($)",
+        min_value=100,
+        max_value=1000000,
+        value=5000
+    )
+    
+    performance_tier = st.sidebar.selectbox(
+        "Performance Tier",
+        ["Development", "Production", "Enterprise"]
+    )
+    
+    regions = st.sidebar.multiselect(
+        "Regions",
+        available_regions,
+        default=[available_regions[0]]
+    )
+    
+    availability_target = st.sidebar.selectbox(
+        "Availability Target",
+        ["99.9%", "99.99%", "99.999%"]
+    )
+    
+    compliance_needs = st.sidebar.multiselect(
+        "Compliance Requirements",
+        ["HIPAA", "PCI DSS", "SOC 2", "GDPR", "ISO 27001"]
+    )
+    
+    expected_users = st.sidebar.number_input(
+        "Expected Users",
+        min_value=1,
+        max_value=1000000,
+        value=1000
+    )
+    
+    data_volume_gb = st.sidebar.number_input(
+        "Data Volume (GB)",
+        min_value=1,
+        max_value=100000,
+        value=100
+    )
+    
+    special_requirements = st.sidebar.multiselect(
+        "Special Requirements",
+        ["Auto Scaling", "Content Delivery", "Backup & DR", "High Availability"]
+    )
+
+    # Create package button
+    if st.sidebar.button("Generate Package", type="primary"):
+        requirements = CustomerRequirement(
+            workload_type=workload_type,
+            monthly_budget=monthly_budget,
+            performance_tier=performance_tier,
+            regions=regions,
+            availability_target=availability_target,
+            compliance_needs=compliance_needs,
+            expected_users=expected_users,
+            data_volume_gb=data_volume_gb,
+            special_requirements=special_requirements
+        )
+        
+        builder = CloudPackageBuilder()
+        
+        with st.spinner("🤖 Generating your cloud package..."):
+            package = builder.create_package(requirements)
+            
+            # Display package details
+            st.header("📦 Your Cloud Package")
+            
+            # Overview metrics
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                st.metric("Monthly Cost", f"${package.total_monthly_cost:,.2f}")
+            with col2:
+                st.metric("Services", len(package.services))
+            with col3:
+                st.metric("Regions", len(regions))
+            
+            # Architecture diagram
+            st.subheader("Architecture")
+            st.mermaid(package.architecture_diagram)
+            
+            # Services table
+            st.subheader("Services Breakdown")
+            services_df = pd.DataFrame([
+                {
+                    "Service": rec.service_name,
+                    "Monthly Cost": f"${rec.monthly_cost:,.2f}",
+                    "Configuration": json.dumps(rec.configuration, indent=2),
+                    "Justification": rec.justification
+                }
+                for rec in package.services
+            ])
+            st.dataframe(services_df)
+            
+            # Optimization tips
+            st.subheader("💡 Optimization Tips")
+            for tip in package.optimization_tips:
+                st.markdown(f"- {tip}")
+            
+            # Compliance notes
+            if package.compliance_notes:
+                st.subheader("🛡️ Compliance Notes")
+                st.info(package.compliance_notes)
+            
+            # Download options
+            st.download_button(
+                "📥 Download Package Details",
+                data=json.dumps({
+                    "requirements": requirements.__dict__,
+                    "package": {
+                        "total_monthly_cost": package.total_monthly_cost,
+                        "services": [s.__dict__ for s in package.services],
+                        "optimization_tips": package.optimization_tips,
+                        "compliance_notes": package.compliance_notes
+                    }
+                }, indent=2),
+                file_name="cloud_package.json",
+                mime="application/json"
             )
-            if response.status_code == 200:
-                return response.json().get('serviceGroup', '')
-            return ''
-        except Exception:
-            return ''
 
-    def _estimate_savings(self, current_service: str, alternative: str, config: Dict) -> float:
-        """Estimate potential cost savings for alternative service"""
-        current_cost = self.calculate_service_cost(current_service, config, config.get('region'))
-        alt_cost = self.calculate_service_cost(alternative, config, config.get('region'))
-        
-        return (current_cost.get('monthly_cost', 0) - alt_cost.get('monthly_cost', 0))
-
-# Usage in your main application
-def get_service_pricing_explorer():
-    calculator = AWSPricingCalculator()
-    
-    # Dynamic service selection
-    service = st.selectbox("Select AWS Service", calculator.services)
-    region = st.selectbox("Select Region", calculator.regions)
-    
-    # Dynamic configuration based on service
-    config = {}
-    pricing_data = calculator.price_list.get_service_pricing(service, region)
-    
-    if pricing_data:
-        # Extract available attributes for configuration
-        sample_product = next(iter(pricing_data.get('products', {}).values()), {})
-        attributes = sample_product.get('attributes', {})
-        
-        st.subheader("Configuration")
-        for attr, value in attributes.items():
-            if attr.lower() in ['instancetype', 'vcpu', 'memory', 'storage']:
-                config[attr] = st.text_input(f"{attr}", value)
-    
-        # Calculate costs
-        if st.button("Calculate Cost"):
-            result = calculator.calculate_service_cost(service, config, region)
-            
-            st.subheader("Cost Breakdown")
-            st.write(f"Monthly Cost: ${result['monthly_cost']:.2f}")
-            
-            st.subheader("Alternative Services")
-            for alt in result['alternatives']:
-                st.write(f"- {alt['service']}: Potential savings ${alt['estimated_savings']:.2f}/month")
-
-# Add to your Streamlit UI
 if __name__ == "__main__":
-    st.title("AWS Service Pricing Calculator")
-    get_service_pricing_explorer()
+    main()
