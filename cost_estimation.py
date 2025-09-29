@@ -1,153 +1,191 @@
-# Add these imports at the top
 import requests
-import time
+import streamlit as st
+from typing import Dict, List, Optional
 from datetime import datetime
-from typing import Dict, Optional, List
+from dataclasses import dataclass
+import json
 from concurrent.futures import ThreadPoolExecutor
 
-# Add these constants after the imports
-AWS_PRICE_LIST_BASE = "https://pricing.us-east-1.amazonaws.com"
-PRICE_LIST_ENDPOINTS = {
-    'AmazonEC2': '/offers/v1.0/aws/AmazonEC2/current/{region}/index.json',
-    'AmazonRDS': '/offers/v1.0/aws/AmazonRDS/current/{region}/index.json',
-    'AmazonS3': '/offers/v1.0/aws/AmazonS3/current/{region}/index.json',
-    'AWSLambda': '/offers/v1.0/aws/AWSLambda/current/{region}/index.json',
-    'AmazonDynamoDB': '/offers/v1.0/aws/AmazonDynamoDB/current/{region}/index.json',
-    'AmazonCloudFront': '/offers/v1.0/aws/AmazonCloudFront/current/index.json'
-}
+@dataclass
+class AWSPriceList:
+    """AWS Price List API Handler"""
+    BASE_URL = "https://pricing.us-east-1.amazonaws.com"
+    
+    @staticmethod
+    def get_services() -> Dict:
+        """Get list of all AWS services"""
+        try:
+            response = requests.get(f"{AWSPriceList.BASE_URL}/offers/v1.0/aws/index.json")
+            if response.status_code == 200:
+                return response.json().get('offers', {})
+            return {}
+        except Exception as e:
+            st.error(f"Error fetching services: {str(e)}")
+            return {}
 
-# Replace the _get_service_pricing method in AWSMultiAgentPackager class
-def _get_service_pricing(self, service_code: str, config: Dict, region: str) -> Dict:
-    """Get real-time pricing for AWS services using Price List API"""
-    try:
-        if service_code not in PRICE_LIST_ENDPOINTS:
-            return self._get_estimated_pricing(service_code)
+    @staticmethod
+    def get_service_pricing(service: str, region: str) -> Dict:
+        """Get pricing data for a service"""
+        try:
+            url = f"{AWSPriceList.BASE_URL}/offers/v1.0/aws/{service}/current/{region}/index.json"
+            response = requests.get(url)
+            if response.status_code == 200:
+                return response.json()
+            return {}
+        except Exception as e:
+            st.error(f"Error fetching {service} pricing: {str(e)}")
+            return {}
 
-        # Get pricing data from AWS Price List API
-        url = AWS_PRICE_LIST_BASE + PRICE_LIST_ENDPOINTS[service_code].format(region=region)
-        response = requests.get(url)
-        
-        if response.status_code != 200:
-            st.warning(f"Could not fetch pricing for {service_code}. Using estimates.")
-            return self._get_estimated_pricing(service_code)
+    @staticmethod
+    def get_regions() -> List[str]:
+        """Get list of AWS regions"""
+        try:
+            response = requests.get(f"{AWSPriceList.BASE_URL}/meta/regions.json")
+            if response.status_code == 200:
+                return list(response.json().keys())
+            return []
+        except Exception as e:
+            st.error(f"Error fetching regions: {str(e)}")
+            return []
 
-        data = response.json()
-        monthly_cost = 0.0
-        
-        # Process different service types
-        if service_code == 'AmazonEC2':
-            monthly_cost = self._calculate_ec2_cost(data, config, region)
-        elif service_code == 'AmazonRDS':
-            monthly_cost = self._calculate_rds_cost(data, config, region)
-        elif service_code == 'AmazonS3':
-            monthly_cost = self._calculate_s3_cost(data, config)
-        elif service_code == 'AWSLambda':
-            monthly_cost = self._calculate_lambda_cost(data, config)
-        else:
-            monthly_cost = self._get_estimated_pricing(service_code)['monthly_cost']
+class AWSPricingCalculator:
+    """Dynamic AWS Service Pricing Calculator"""
+    
+    def __init__(self):
+        self.price_list = AWSPriceList()
+        self.services = self.price_list.get_services()
+        self.regions = self.price_list.get_regions()
+
+    def calculate_service_cost(self, service: str, config: Dict, region: str) -> Dict:
+        """Calculate cost for any AWS service"""
+        pricing_data = self.price_list.get_service_pricing(service, region)
+        if not pricing_data:
+            return {"error": f"No pricing data available for {service}"}
+
+        monthly_cost = self._process_pricing_data(pricing_data, config)
+        alternatives = self._find_alternatives(service, config)
 
         return {
-            'monthly_cost': monthly_cost,
-            'alternatives': self._get_service_alternatives(service_code),
-            'last_updated': datetime.now().isoformat()
+            "monthly_cost": monthly_cost,
+            "alternatives": alternatives,
+            "last_updated": datetime.now().isoformat()
         }
 
-    except Exception as e:
-        st.warning(f"Error fetching price for {service_code}: {str(e)}")
-        return self._get_estimated_pricing(service_code)
+    def _process_pricing_data(self, pricing_data: Dict, config: Dict) -> float:
+        """Process pricing data based on service attributes"""
+        total_cost = 0.0
+        products = pricing_data.get('products', {})
+        terms = pricing_data.get('terms', {}).get('OnDemand', {})
 
-def _calculate_ec2_cost(self, price_data: Dict, config: Dict, region: str) -> float:
-    """Calculate EC2 instance cost"""
-    instance_type = config.get('instance_type', 't3.medium')
-    os = config.get('os', 'Linux')
-    hours = 730  # Average hours per month
-    
-    for product in price_data.get('products', {}).values():
-        attributes = product.get('attributes', {})
-        if (attributes.get('instanceType') == instance_type and 
-            attributes.get('operatingSystem') == os and
-            attributes.get('tenancy') == 'Shared'):
-            
-            # Get pricing terms
-            sku = product.get('sku')
-            terms = price_data.get('terms', {}).get('OnDemand', {})
-            
-            for term in terms.values():
-                if term.get('sku') == sku:
-                    for price_dim in term.get('priceDimensions', {}).values():
-                        price_per_hour = float(price_dim.get('pricePerUnit', {}).get('USD', 0))
-                        return price_per_hour * hours
-    
-    return 0.0
+        for product in products.values():
+            if self._matches_configuration(product.get('attributes', {}), config):
+                sku = product.get('sku')
+                for term in terms.values():
+                    if term.get('sku') == sku:
+                        total_cost += self._calculate_price_dimensions(
+                            term.get('priceDimensions', {}),
+                            config
+                        )
 
-def _calculate_rds_cost(self, price_data: Dict, config: Dict, region: str) -> float:
-    """Calculate RDS instance cost"""
-    instance_type = config.get('instance', 'db.t3.medium')
-    engine = config.get('engine', 'PostgreSQL')
-    hours = 730
-    
-    for product in price_data.get('products', {}).values():
-        attributes = product.get('attributes', {})
-        if (attributes.get('instanceType') == instance_type and 
-            attributes.get('databaseEngine') == engine):
-            
-            sku = product.get('sku')
-            terms = price_data.get('terms', {}).get('OnDemand', {})
-            
-            for term in terms.values():
-                if term.get('sku') == sku:
-                    for price_dim in term.get('priceDimensions', {}).values():
-                        price_per_hour = float(price_dim.get('pricePerUnit', {}).get('USD', 0))
-                        return price_per_hour * hours
-    
-    return 0.0
+        return total_cost
 
-def _calculate_s3_cost(self, price_data: Dict, config: Dict) -> float:
-    """Calculate S3 storage cost"""
-    storage_class = config.get('storage_class', 'STANDARD')
-    storage_gb = config.get('storage_gb', 100)
-    
-    for product in price_data.get('products', {}).values():
-        attributes = product.get('attributes', {})
-        if (attributes.get('storageClass') == storage_class and 
-            attributes.get('volumeType') == 'Standard'):
-            
-            sku = product.get('sku')
-            terms = price_data.get('terms', {}).get('OnDemand', {})
-            
-            for term in terms.values():
-                if term.get('sku') == sku:
-                    for price_dim in term.get('priceDimensions', {}).values():
-                        price_per_gb = float(price_dim.get('pricePerUnit', {}).get('USD', 0))
-                        return price_per_gb * storage_gb
-    
-    return 0.0
+    def _matches_configuration(self, attributes: Dict, config: Dict) -> bool:
+        """Check if product attributes match required configuration"""
+        for key, value in config.items():
+            if key in attributes and str(attributes[key]) != str(value):
+                return False
+        return True
 
-def _calculate_lambda_cost(self, price_data: Dict, config: Dict) -> float:
-    """Calculate Lambda cost"""
-    memory = config.get('memory', 512)
-    invocations = config.get('invocations', 1000000)
-    avg_duration_ms = config.get('duration_ms', 500)
-    
-    # Lambda pricing components
-    request_price = 0.0000002  # $0.20 per 1M requests
-    compute_price = 0.0000166667  # per GB-second
-    
-    # Calculate costs
-    request_cost = (invocations * request_price)
-    compute_gb_seconds = (invocations * avg_duration_ms * (memory / 1024) / 1000)
-    compute_cost = compute_gb_seconds * compute_price
-    
-    return request_cost + compute_cost
+    def _calculate_price_dimensions(self, dimensions: Dict, config: Dict) -> float:
+        """Calculate cost across all price dimensions"""
+        total_cost = 0.0
+        usage_hours = config.get('hours', 730)  # Default to monthly hours
 
-def _get_service_alternatives(self, service_code: str) -> List[str]:
-    """Get alternative services based on workload type"""
-    alternatives = {
-        'AmazonEC2': ['AWSLambda', 'AWSFargate', 'AmazonLightsail'],
-        'AmazonRDS': ['AmazonDynamoDB', 'AmazonAurora', 'AmazonDocumentDB'],
-        'AmazonS3': ['AmazonEFS', 'AmazonFSx', 'AWSStorageGateway'],
-        'AWSLambda': ['AmazonEC2', 'AWSFargate', 'AmazonLightsail'],
-        'AmazonDynamoDB': ['AmazonRDS', 'AmazonDocumentDB', 'AmazonElastiCache'],
-        'AmazonCloudFront': ['AWSGlobalAccelerator', 'AmazonRoute53']
-    }
-    return alternatives.get(service_code, [])
+        for dimension in dimensions.values():
+            unit = dimension.get('unit', '')
+            price = float(dimension.get('pricePerUnit', {}).get('USD', 0))
+
+            if 'Hour' in unit:
+                total_cost += price * usage_hours
+            elif 'GB' in unit:
+                total_cost += price * config.get('size_gb', 0)
+            elif 'Requests' in unit:
+                total_cost += price * config.get('requests', 0) / 1000  # Price per 1000 requests
+            else:
+                # Handle other units based on config
+                quantity = config.get(unit.lower(), 1)
+                total_cost += price * quantity
+
+        return total_cost
+
+    def _find_alternatives(self, service: str, config: Dict) -> List[Dict]:
+        """Find alternative services based on workload requirements"""
+        alternatives = []
+        service_category = self._get_service_category(service)
+        
+        for other_service in self.services:
+            if (other_service != service and 
+                self._get_service_category(other_service) == service_category):
+                alternatives.append({
+                    "service": other_service,
+                    "estimated_savings": self._estimate_savings(service, other_service, config)
+                })
+
+        return sorted(alternatives, key=lambda x: x['estimated_savings'], reverse=True)[:3]
+
+    def _get_service_category(self, service: str) -> str:
+        """Get service category from AWS service metadata"""
+        try:
+            response = requests.get(
+                f"{AWSPriceList.BASE_URL}/offers/v1.0/aws/{service}/current/metadata.json"
+            )
+            if response.status_code == 200:
+                return response.json().get('serviceGroup', '')
+            return ''
+        except Exception:
+            return ''
+
+    def _estimate_savings(self, current_service: str, alternative: str, config: Dict) -> float:
+        """Estimate potential cost savings for alternative service"""
+        current_cost = self.calculate_service_cost(current_service, config, config.get('region'))
+        alt_cost = self.calculate_service_cost(alternative, config, config.get('region'))
+        
+        return (current_cost.get('monthly_cost', 0) - alt_cost.get('monthly_cost', 0))
+
+# Usage in your main application
+def get_service_pricing_explorer():
+    calculator = AWSPricingCalculator()
+    
+    # Dynamic service selection
+    service = st.selectbox("Select AWS Service", calculator.services)
+    region = st.selectbox("Select Region", calculator.regions)
+    
+    # Dynamic configuration based on service
+    config = {}
+    pricing_data = calculator.price_list.get_service_pricing(service, region)
+    
+    if pricing_data:
+        # Extract available attributes for configuration
+        sample_product = next(iter(pricing_data.get('products', {}).values()), {})
+        attributes = sample_product.get('attributes', {})
+        
+        st.subheader("Configuration")
+        for attr, value in attributes.items():
+            if attr.lower() in ['instancetype', 'vcpu', 'memory', 'storage']:
+                config[attr] = st.text_input(f"{attr}", value)
+    
+        # Calculate costs
+        if st.button("Calculate Cost"):
+            result = calculator.calculate_service_cost(service, config, region)
+            
+            st.subheader("Cost Breakdown")
+            st.write(f"Monthly Cost: ${result['monthly_cost']:.2f}")
+            
+            st.subheader("Alternative Services")
+            for alt in result['alternatives']:
+                st.write(f"- {alt['service']}: Potential savings ${alt['estimated_savings']:.2f}/month")
+
+# Add to your Streamlit UI
+if __name__ == "__main__":
+    st.title("AWS Service Pricing Calculator")
+    get_service_pricing_explorer()
