@@ -268,6 +268,62 @@ class CloudPackageBuilder:
         }
         self.price_list = AWSPriceList()
 
+class CloudPackageBuilder:
+    # ... existing methods ...
+
+    def _filter_by_budget(self, recommendations: List[ServiceRecommendation], 
+                         budget: float) -> List[ServiceRecommendation]:
+        """Filter recommendations to stay within budget"""
+        # Sort by cost effectiveness (lower cost first)
+        recommendations.sort(key=lambda x: x.monthly_cost)
+        
+        filtered = []
+        total_cost = 0.0
+        
+        # Add services while staying under budget
+        for rec in recommendations:
+            if total_cost + rec.monthly_cost <= budget:
+                filtered.append(rec)
+                total_cost += rec.monthly_cost
+                
+        return filtered
+
+    def _generate_optimization_tips(self, recommendations: List[ServiceRecommendation]) -> List[str]:
+        """Generate cost optimization tips based on selected services"""
+        tips = []
+        
+        for rec in recommendations:
+            if rec.service_name == "Amazon EC2":
+                tips.extend([
+                    "Consider Reserved Instances for consistent workloads to save up to 75%",
+                    "Use Auto Scaling to optimize instance count based on demand"
+                ])
+            elif rec.service_name == "Amazon S3":
+                tips.extend([
+                    "Implement lifecycle policies to move infrequently accessed data to cheaper storage classes",
+                    "Enable Intelligent-Tiering for automatic cost optimization"
+                ])
+            elif rec.service_name == "Amazon RDS":
+                tips.extend([
+                    "Consider Aurora Serverless for variable workloads",
+                    "Use read replicas only when needed for performance"
+                ])
+                
+        return list(set(tips))  # Remove duplicates
+
+    def _generate_compliance_notes(self, requirements: CustomerRequirement,
+                                 recommendations: List[ServiceRecommendation]) -> str:
+        """Generate compliance-related notes"""
+        if not requirements.compliance_needs:
+            return ""
+            
+        notes = []
+        for compliance in requirements.compliance_needs:
+            notes.append(f"✓ {compliance} Compliance:")
+            if compliance == "HIPAA":
+                notes.append("  - Ensure all EBS volumes are encrypted")
+                notes.append("  -
+
     def create_package(self, requirements: CustomerRequirement) -> CloudPackage:
         recommendations = []
         
