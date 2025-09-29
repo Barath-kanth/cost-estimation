@@ -187,6 +187,70 @@ class StorageAgent(CloudServiceAgent):
             )
         ]
 
+    def _recommend_ebs(self, requirements: CustomerRequirement) -> List[ServiceRecommendation]:
+        """Recommend EBS storage configuration"""
+        monthly_cost = self._calculate_ebs_cost(requirements)
+        volume_type = self._get_suitable_volume_type(requirements)
+        
+        return [
+            ServiceRecommendation(
+                service_name="Amazon EBS",
+                configuration={
+                    "volume_type": volume_type,
+                    "size_gb": requirements.data_volume_gb,
+                    "iops": self._calculate_iops(requirements) if volume_type == "io2" else "N/A",
+                    "throughput": self._calculate_throughput(requirements),
+                },
+                monthly_cost=monthly_cost,
+                justification=f"Block storage optimized for {requirements.performance_tier} workloads",
+                alternatives=["Amazon S3", "Amazon EFS"]
+            )
+        ]
+
+    def _calculate_ebs_cost(self, requirements: CustomerRequirement) -> float:
+        """Calculate EBS storage cost"""
+        volume_type = self._get_suitable_volume_type(requirements)
+        # Pricing per GB-month
+        volume_prices = {
+            "gp3": 0.08,  # General Purpose SSD
+            "io2": 0.125, # Provisioned IOPS SSD
+            "st1": 0.045  # Throughput Optimized HDD
+        }
+        
+        base_cost = requirements.data_volume_gb * volume_prices.get(volume_type, 0.08)
+        
+        # Add IOPS cost for io2 volumes
+        if volume_type == "io2":
+            iops = self._calculate_iops(requirements)
+            iops_cost = (iops - 3000) * 0.065 if iops > 3000 else 0  # $0.065 per IOPS above 3000
+            base_cost += iops_cost
+            
+        return base_cost
+
+    def _get_suitable_volume_type(self, requirements: CustomerRequirement) -> str:
+        """Determine suitable EBS volume type based on requirements"""
+        if requirements.performance_tier == "Enterprise":
+            return "io2"  # Provisioned IOPS for high performance
+        elif requirements.performance_tier == "Production":
+            return "gp3"  # General Purpose SSD for balanced performance
+        else:
+            return "st1" if requirements.data_volume_gb > 500 else "gp3"
+
+    def _calculate_iops(self, requirements: CustomerRequirement) -> int:
+        """Calculate required IOPS based on workload"""
+        if requirements.performance_tier == "Enterprise":
+            return min(32000, max(3000, int(requirements.data_volume_gb * 50)))
+        return 3000  # Default IOPS for gp3
+
+    def _calculate_throughput(self, requirements: CustomerRequirement) -> str:
+        """Calculate required throughput in MiB/s"""
+        base_throughput = {
+            "Development": 125,
+            "Production": 250,
+            "Enterprise": 500
+        }
+        return f"{base_throughput.get(requirements.performance_tier, 125)} MiB/s"
+
     def _calculate_s3_cost(self, requirements: CustomerRequirement) -> float:
         pricing = self.price_list._get_default_pricing("AmazonS3")
         return requirements.data_volume_gb * pricing.get("standard", 0.023)
