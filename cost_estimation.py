@@ -7,7 +7,6 @@ from datetime import datetime
 import pandas as pd
 from concurrent.futures import ThreadPoolExecutor
 
-# AWS Price List API Handler
 @dataclass
 class AWSPriceList:
     """AWS Price List API Handler"""
@@ -88,254 +87,11 @@ class ServiceRecommendation:
 class CloudPackage:
     total_monthly_cost: float
     services: List[ServiceRecommendation]
-    architecture_diagram: str
     optimization_tips: List[str]
     compliance_notes: str
+    recommendations: Dict[str, List[str]]
 
-class CloudServiceAgent:
-    """Base agent class for cloud service recommendations"""
-    def __init__(self, service_category: str):
-        self.category = service_category
-        self.price_list = AWSPriceList()
-
-    def recommend(self, requirements: CustomerRequirement) -> List[ServiceRecommendation]:
-        raise NotImplementedError
-
-    def _get_suitable_instances(self, requirements: CustomerRequirement) -> List[str]:
-        """Get suitable EC2 instances based on requirements"""
-        if requirements.performance_tier == "Development":
-            return ["t3.micro", "t3.small"]
-        elif requirements.performance_tier == "Production":
-            return ["t3.medium", "t3.large"]
-        else:  # Enterprise
-            return ["t3.large", "t3.xlarge"]
-
-class ComputeAgent(CloudServiceAgent):
-    def recommend(self, requirements: CustomerRequirement) -> List[ServiceRecommendation]:
-        if requirements.workload_type == "serverless":
-            return self._recommend_lambda(requirements)
-        return self._recommend_ec2(requirements)
-
-    def _recommend_ec2(self, requirements: CustomerRequirement) -> List[ServiceRecommendation]:
-        instance_types = self._get_suitable_instances(requirements)
-        pricing_data = self.price_list.get_service_pricing("AmazonEC2", requirements.regions[0])
-        
-        recommendations = []
-        for instance_type in instance_types:
-            monthly_cost = self._calculate_ec2_cost(instance_type, requirements)
-            if monthly_cost <= requirements.monthly_budget:
-                recommendations.append(
-                    ServiceRecommendation(
-                        service_name="Amazon EC2",
-                        configuration={
-                            "instance_type": instance_type,
-                            "region": requirements.regions[0],
-                            "auto_scaling": "Auto Scaling" in requirements.special_requirements
-                        },
-                        monthly_cost=monthly_cost,
-                        justification=f"Selected {instance_type} based on {requirements.performance_tier} tier requirements",
-                        alternatives=["AWS Lambda", "AWS Fargate"]
-                    )
-                )
-        return recommendations
-
-    def _recommend_lambda(self, requirements: CustomerRequirement) -> List[ServiceRecommendation]:
-        # Lambda recommendation implementation
-        monthly_cost = self._calculate_lambda_cost(requirements)
-        return [
-            ServiceRecommendation(
-                service_name="AWS Lambda",
-                configuration={
-                    "memory": 128,
-                    "timeout": 30,
-                    "concurrent_executions": requirements.expected_users // 100
-                },
-                monthly_cost=monthly_cost,
-                justification="Serverless compute for cost-effective scaling",
-                alternatives=["Amazon EC2", "AWS Fargate"]
-            )
-        ]
-
-    def _calculate_ec2_cost(self, instance_type: str, requirements: CustomerRequirement) -> float:
-        base_price = self.price_list._get_default_pricing("AmazonEC2").get(instance_type, 0.0)
-        hours_per_month = 730
-        return base_price * hours_per_month
-
-    def _calculate_lambda_cost(self, requirements: CustomerRequirement) -> float:
-        requests_per_month = requirements.expected_users * 100  # Estimate
-        gb_seconds = requests_per_month * 0.128 * 0.1  # 128MB, 100ms average
-        return (requests_per_month * 0.0000002) + (gb_seconds * 0.0000166667)
-
-class StorageAgent(CloudServiceAgent):
-    def recommend(self, requirements: CustomerRequirement) -> List[ServiceRecommendation]:
-        if requirements.data_volume_gb > 1000:
-            return self._recommend_s3(requirements)
-        return self._recommend_ebs(requirements)
-
-    def _recommend_s3(self, requirements: CustomerRequirement) -> List[ServiceRecommendation]:
-        monthly_cost = self._calculate_s3_cost(requirements)
-        return [
-            ServiceRecommendation(
-                service_name="Amazon S3",
-                configuration={
-                    "storage_class": "Standard",
-                    "lifecycle_rules": True if requirements.data_volume_gb > 5000 else False
-                },
-                monthly_cost=monthly_cost,
-                justification="Scalable object storage with high durability",
-                alternatives=["Amazon EFS", "Amazon EBS"]
-            )
-        ]
-
-    def _recommend_ebs(self, requirements: CustomerRequirement) -> List[ServiceRecommendation]:
-        """Recommend EBS storage configuration"""
-        monthly_cost = self._calculate_ebs_cost(requirements)
-        volume_type = self._get_suitable_volume_type(requirements)
-        
-        return [
-            ServiceRecommendation(
-                service_name="Amazon EBS",
-                configuration={
-                    "volume_type": volume_type,
-                    "size_gb": requirements.data_volume_gb,
-                    "iops": self._calculate_iops(requirements) if volume_type == "io2" else "N/A",
-                    "throughput": self._calculate_throughput(requirements),
-                },
-                monthly_cost=monthly_cost,
-                justification=f"Block storage optimized for {requirements.performance_tier} workloads",
-                alternatives=["Amazon S3", "Amazon EFS"]
-            )
-        ]
-
-    def _calculate_ebs_cost(self, requirements: CustomerRequirement) -> float:
-        """Calculate EBS storage cost"""
-        volume_type = self._get_suitable_volume_type(requirements)
-        # Pricing per GB-month
-        volume_prices = {
-            "gp3": 0.08,  # General Purpose SSD
-            "io2": 0.125, # Provisioned IOPS SSD
-            "st1": 0.045  # Throughput Optimized HDD
-        }
-        
-        base_cost = requirements.data_volume_gb * volume_prices.get(volume_type, 0.08)
-        
-        # Add IOPS cost for io2 volumes
-        if volume_type == "io2":
-            iops = self._calculate_iops(requirements)
-            iops_cost = (iops - 3000) * 0.065 if iops > 3000 else 0  # $0.065 per IOPS above 3000
-            base_cost += iops_cost
-            
-        return base_cost
-
-    def _get_suitable_volume_type(self, requirements: CustomerRequirement) -> str:
-        """Determine suitable EBS volume type based on requirements"""
-        if requirements.performance_tier == "Enterprise":
-            return "io2"  # Provisioned IOPS for high performance
-        elif requirements.performance_tier == "Production":
-            return "gp3"  # General Purpose SSD for balanced performance
-        else:
-            return "st1" if requirements.data_volume_gb > 500 else "gp3"
-
-    def _calculate_iops(self, requirements: CustomerRequirement) -> int:
-        """Calculate required IOPS based on workload"""
-        if requirements.performance_tier == "Enterprise":
-            return min(32000, max(3000, int(requirements.data_volume_gb * 50)))
-        return 3000  # Default IOPS for gp3
-
-    def _calculate_throughput(self, requirements: CustomerRequirement) -> str:
-        """Calculate required throughput in MiB/s"""
-        base_throughput = {
-            "Development": 125,
-            "Production": 250,
-            "Enterprise": 500
-        }
-        return f"{base_throughput.get(requirements.performance_tier, 125)} MiB/s"
-
-    def _calculate_s3_cost(self, requirements: CustomerRequirement) -> float:
-        pricing = self.price_list._get_default_pricing("AmazonS3")
-        return requirements.data_volume_gb * pricing.get("standard", 0.023)
-
-class DatabaseAgent(CloudServiceAgent):
-    def recommend(self, requirements: CustomerRequirement) -> List[ServiceRecommendation]:
-        if "High Availability" in requirements.special_requirements:
-            return self._recommend_aurora(requirements)
-        return self._recommend_rds(requirements)
-
-    def _recommend_rds(self, requirements: CustomerRequirement) -> List[ServiceRecommendation]:
-        instance_type = "db.t3.medium"
-        monthly_cost = self._calculate_rds_cost(instance_type, requirements)
-        return [
-            ServiceRecommendation(
-                service_name="Amazon RDS",
-                configuration={
-                    "instance_type": instance_type,
-                    "engine": "PostgreSQL",
-                    "multi_az": "High Availability" in requirements.special_requirements
-                },
-                monthly_cost=monthly_cost,
-                justification="Managed relational database service",
-                alternatives=["Amazon Aurora", "Amazon DynamoDB"]
-            )
-        ]
-
-    def _calculate_rds_cost(self, instance_type: str, requirements: CustomerRequirement) -> float:
-        pricing = self.price_list._get_default_pricing("AmazonRDS")
-        base_cost = pricing.get(instance_type, 0.068) * 730
-        storage_cost = requirements.data_volume_gb * 0.115
-        return base_cost + storage_cost
-
-class NetworkingAgent(CloudServiceAgent):
-    def recommend(self, requirements: CustomerRequirement) -> List[ServiceRecommendation]:
-        recommendations = []
-        if "Content Delivery" in requirements.special_requirements:
-            recommendations.extend(self._recommend_cloudfront(requirements))
-        return recommendations
-
-    def _recommend_cloudfront(self, requirements: CustomerRequirement) -> List[ServiceRecommendation]:
-        monthly_cost = self._calculate_cloudfront_cost(requirements)
-        return [
-            ServiceRecommendation(
-                service_name="Amazon CloudFront",
-                configuration={
-                    "price_class": "PriceClass_100",
-                    "ssl_certificate": "ACM"
-                },
-                monthly_cost=monthly_cost,
-                justification="Global content delivery network",
-                alternatives=["AWS Global Accelerator"]
-            )
-        ]
-
-    def _calculate_cloudfront_cost(self, requirements: CustomerRequirement) -> float:
-        data_transfer_gb = requirements.data_volume_gb * 0.5  # Estimate 50% of data through CDN
-        return data_transfer_gb * 0.085  # Average cost per GB
-
-class SecurityAgent(CloudServiceAgent):
-    def recommend(self, requirements: CustomerRequirement) -> List[ServiceRecommendation]:
-        recommendations = []
-        if requirements.compliance_needs:
-            recommendations.extend(self._recommend_security_services(requirements))
-        return recommendations
-
-    def _recommend_security_services(self, requirements: CustomerRequirement) -> List[ServiceRecommendation]:
-        services = []
-        monthly_cost = 0.0
-
-        if "HIPAA" in requirements.compliance_needs or "PCI DSS" in requirements.compliance_needs:
-            services.append(
-                ServiceRecommendation(
-                    service_name="AWS WAF",
-                    configuration={
-                        "rules": ["SQL injection", "Cross-site scripting"]
-                    },
-                    monthly_cost=20.0,
-                    justification="Web application firewall for security compliance",
-                    alternatives=["Third-party WAF"]
-                )
-            )
-            monthly_cost += 20.0
-
-        return services
+# ... Rest of your existing agent classes (ComputeAgent, StorageAgent, etc.) ...
 
 class CloudPackageBuilder:
     def __init__(self):
@@ -369,139 +125,65 @@ class CloudPackageBuilder:
             requirements.monthly_budget
         )
 
+        # Generate service-specific recommendations
+        service_recommendations = self._generate_service_recommendations(
+            filtered_recommendations,
+            requirements
+        )
+
         return CloudPackage(
             total_monthly_cost=sum(r.monthly_cost for r in filtered_recommendations),
             services=filtered_recommendations,
-            architecture_diagram=self._generate_architecture_diagram(filtered_recommendations),
             optimization_tips=self._generate_optimization_tips(filtered_recommendations),
-            compliance_notes=self._generate_compliance_notes(requirements, filtered_recommendations)
+            compliance_notes=self._generate_compliance_notes(requirements, filtered_recommendations),
+            recommendations=service_recommendations
         )
 
-    def _filter_by_budget(self, recommendations: List[ServiceRecommendation], 
-                         budget: float) -> List[ServiceRecommendation]:
-        """Filter recommendations to stay within budget"""
-        recommendations.sort(key=lambda x: x.monthly_cost)
-        filtered = []
-        total_cost = 0
+    def _generate_service_recommendations(self, recommendations: List[ServiceRecommendation], 
+                                       requirements: CustomerRequirement) -> Dict[str, List[str]]:
+        """Generate detailed recommendations for each service"""
+        service_recommendations = {}
         
         for rec in recommendations:
-            if total_cost + rec.monthly_cost <= budget:
-                filtered.append(rec)
-                total_cost += rec.monthly_cost
-        
-        return filtered
-
-    def _generate_architecture_diagram(self, recommendations: List[ServiceRecommendation]) -> str:
-        """Generate Mermaid.js architecture diagram"""
-        diagram = """graph TD
-    Client((Client))"""
-        
-        # Add services
-        service_nodes = []
-        for i, rec in enumerate(recommendations):
-            service_id = f"svc{i}"
-            service_nodes.append(service_id)
-            diagram += f'\n    {service_id}["{rec.service_name}"]'
-        
-        # Add connections
-        if service_nodes:
-            diagram += f'\n    Client --> {service_nodes[0]}'
-            for i in range(len(service_nodes)-1):
-                diagram += f'\n    {service_nodes[i]} --> {service_nodes[i+1]}'
-        
-        return diagram
-
-    def _generate_optimization_tips(self, recommendations: List[ServiceRecommendation]) -> List[str]:
-        """Generate cost optimization tips"""
-        tips = []
-        total_cost = sum(r.monthly_cost for r in recommendations)
-        
-        if total_cost > 1000:
-            tips.append("Consider reserved instances for predictable workloads")
-        if any(r.service_name == "Amazon EC2" for r in recommendations):
-            tips.append("Use Auto Scaling to optimize compute costs")
-        if any(r.service_name == "Amazon S3" for r in recommendations):
-            tips.append("Implement S3 lifecycle policies for cost-effective storage")
+            if rec.service_name == "Amazon EC2":
+                service_recommendations["Compute"] = [
+                    f"Instance Type: {rec.configuration['instance_type']} optimized for {requirements.performance_tier}",
+                    "Enable detailed monitoring for better scaling decisions",
+                    "Implement proper instance tagging for cost allocation",
+                    f"Configure Auto Scaling group with min={max(1, requirements.expected_users//1000)} instances"
+                ]
             
-        return tips
-
-    def _generate_compliance_notes(self, requirements: CustomerRequirement, 
-                                 recommendations: List[ServiceRecommendation]) -> str:
-        """Generate compliance-related notes"""
-        if not requirements.compliance_needs:
-            return ""
+            elif rec.service_name == "Amazon RDS":
+                service_recommendations["Database"] = [
+                    f"Database Instance: {rec.configuration['instance_type']}",
+                    "Enable automated backups with 7-day retention",
+                    "Set up read replicas for better performance",
+                    "Configure Parameter Groups for workload optimization"
+                ]
             
-        notes = ["Compliance Considerations:"]
-        for compliance in requirements.compliance_needs:
-            notes.append(f"- {compliance} requirements are addressed through:")
-            for rec in recommendations:
-                if rec.service_name in ["AWS WAF", "Amazon GuardDuty"]:
-                    notes.append(f"  * {rec.service_name}: {rec.justification}")
-                    
-        return "\n".join(notes)
+            elif rec.service_name == "Amazon S3":
+                service_recommendations["Storage"] = [
+                    f"Storage Class: {rec.configuration['storage_class']}",
+                    "Enable versioning for critical data",
+                    "Configure lifecycle rules for cost optimization",
+                    "Set up bucket policies for secure access"
+                ]
+            
+            elif rec.service_name == "AWS WAF":
+                service_recommendations["Security"] = [
+                    "Deploy managed rules for common vulnerabilities",
+                    "Set up rate limiting rules",
+                    "Enable logging for security analysis",
+                    "Implement custom rules based on application needs"
+                ]
+
+        return service_recommendations
 
 def main():
     st.set_page_config(page_title="AWS Cloud Package Builder", layout="wide")
     st.title("🚀 AWS Cloud Package Builder")
 
-    # Get available regions
-    price_list = AWSPriceList()
-    available_regions = price_list.get_regions()
-
-    # Sidebar for requirements
-    st.sidebar.header("Requirements")
-    
-    workload_type = st.sidebar.selectbox(
-        "Workload Type",
-        ["Web Application", "Data Processing", "Machine Learning", "Microservices"]
-    )
-    
-    monthly_budget = st.sidebar.number_input(
-        "Monthly Budget ($)",
-        min_value=100,
-        max_value=1000000,
-        value=5000
-    )
-    
-    performance_tier = st.sidebar.selectbox(
-        "Performance Tier",
-        ["Development", "Production", "Enterprise"]
-    )
-    
-    regions = st.sidebar.multiselect(
-        "Regions",
-        available_regions,
-        default=[available_regions[0]]
-    )
-    
-    availability_target = st.sidebar.selectbox(
-        "Availability Target",
-        ["99.9%", "99.99%", "99.999%"]
-    )
-    
-    compliance_needs = st.sidebar.multiselect(
-        "Compliance Requirements",
-        ["HIPAA", "PCI DSS", "SOC 2", "GDPR", "ISO 27001"]
-    )
-    
-    expected_users = st.sidebar.number_input(
-        "Expected Users",
-        min_value=1,
-        max_value=1000000,
-        value=1000
-    )
-    
-    data_volume_gb = st.sidebar.number_input(
-        "Data Volume (GB)",
-        min_value=1,
-        max_value=100000,
-        value=100
-    )
-    
-    special_requirements = st.sidebar.multiselect(
-        "Special Requirements",
-        ["Auto Scaling", "Content Delivery", "Backup & DR", "High Availability"]
-    )
+    # ... Your existing sidebar code ...
 
     # Create package button
     if st.sidebar.button("Generate Package", type="primary"):
@@ -534,9 +216,12 @@ def main():
             with col3:
                 st.metric("Regions", len(regions))
             
-            # Architecture diagram
-            st.subheader("Architecture")
-            st.mermaid(package.architecture_diagram)
+            # Detailed Recommendations
+            st.subheader("🔧 Service Configurations & Recommendations")
+            for category, recs in package.recommendations.items():
+                with st.expander(f"{category} Configuration"):
+                    for rec in recs:
+                        st.markdown(f"- {rec}")
             
             # Services table
             st.subheader("Services Breakdown")
@@ -570,7 +255,8 @@ def main():
                         "total_monthly_cost": package.total_monthly_cost,
                         "services": [s.__dict__ for s in package.services],
                         "optimization_tips": package.optimization_tips,
-                        "compliance_notes": package.compliance_notes
+                        "compliance_notes": package.compliance_notes,
+                        "recommendations": package.recommendations
                     }
                 }, indent=2),
                 file_name="cloud_package.json",
