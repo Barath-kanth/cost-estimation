@@ -183,7 +183,80 @@ def main():
     st.set_page_config(page_title="AWS Cloud Package Builder", layout="wide")
     st.title("🚀 AWS Cloud Package Builder")
 
-    # ... Your existing sidebar code ...
+    # Get available regions
+    price_list = AWSPriceList()
+    available_regions = price_list.get_regions()
+
+    # Sidebar for requirements
+    st.sidebar.header("Requirements")
+    
+    workload_type = st.sidebar.selectbox(
+        "Workload Type",
+        ["Web Application", "Data Processing", "Machine Learning", "Microservices", "Serverless"]
+    )
+    
+    monthly_budget = st.sidebar.number_input(
+        "Monthly Budget ($)",
+        min_value=100,
+        max_value=1000000,
+        value=5000
+    )
+    
+    performance_tier = st.sidebar.selectbox(
+        "Performance Tier",
+        ["Development", "Production", "Enterprise"]
+    )
+    
+    regions = st.sidebar.multiselect(
+        "Regions",
+        available_regions,
+        default=[available_regions[0] if available_regions else "us-east-1"]
+    )
+    
+    availability_target = st.sidebar.selectbox(
+        "Availability Target",
+        ["99.9%", "99.99%", "99.999%"]
+    )
+    
+    compliance_needs = st.sidebar.multiselect(
+        "Compliance Requirements",
+        ["HIPAA", "PCI DSS", "SOC 2", "GDPR", "ISO 27001"]
+    )
+    
+    expected_users = st.sidebar.number_input(
+        "Expected Monthly Users",
+        min_value=1,
+        max_value=1000000,
+        value=1000
+    )
+    
+    data_volume_gb = st.sidebar.number_input(
+        "Expected Data Volume (GB)",
+        min_value=1,
+        max_value=100000,
+        value=100
+    )
+    
+    special_requirements = st.sidebar.multiselect(
+        "Special Requirements",
+        ["Auto Scaling", "Content Delivery", "Backup & DR", "High Availability"]
+    )
+
+    # Rest of your main function code...
+    if st.sidebar.button("Generate Package", type="primary"):
+        requirements = CustomerRequirement(
+            workload_type=workload_type,
+            monthly_budget=monthly_budget,
+            performance_tier=performance_tier,
+            regions=regions,
+            availability_target=availability_target,
+            compliance_needs=compliance_needs,
+            expected_users=expected_users,
+            data_volume_gb=data_volume_gb,
+            special_requirements=special_requirements
+        )
+        
+        # ... rest of your existing code ...
 
     # Create package button
     if st.sidebar.button("Generate Package", type="primary"):
