@@ -322,8 +322,16 @@ class CloudPackageBuilder:
             notes.append(f"✓ {compliance} Compliance:")
             if compliance == "HIPAA":
                 notes.append("  - Ensure all EBS volumes are encrypted")
-                notes.append("  -
-
+                notes.append("  - Enable AWS CloudTrail for audit logging")
+            elif compliance == "PCI DSS":
+                notes.append("  - Implement AWS WAF rules for web applications")
+                notes.append("  - Use AWS Config for continuous compliance monitoring")
+            elif compliance == "GDPR":
+                notes.append("  - Enable encryption at rest for all storage services")
+                notes.append("  - Implement data lifecycle management policies")
+                
+        return "\n".join(notes)
+        
     def create_package(self, requirements: CustomerRequirement) -> CloudPackage:
         recommendations = []
         
