@@ -5,7 +5,6 @@ Uses AWS APIs to avoid hardcoding - fully adaptive to new services
 """
 
 import json
-import boto3
 import streamlit as st
 from typing import Dict, List, Optional, Tuple
 from dataclasses import dataclass, asdict
