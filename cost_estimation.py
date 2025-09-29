@@ -242,19 +242,7 @@ def main():
         ["Auto Scaling", "Content Delivery", "Backup & DR", "High Availability"]
     )
 
-    # Rest of your main function code...
-    if st.sidebar.button("Generate Package", type="primary"):
-        requirements = CustomerRequirement(
-            workload_type=workload_type,
-            monthly_budget=monthly_budget,
-            performance_tier=performance_tier,
-            regions=regions,
-            availability_target=availability_target,
-            compliance_needs=compliance_needs,
-            expected_users=expected_users,
-            data_volume_gb=data_volume_gb,
-            special_requirements=special_requirements
-        )
+
         
         # ... rest of your existing code ...
 
