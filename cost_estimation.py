@@ -91,6 +91,170 @@ class CloudPackage:
     compliance_notes: str
     recommendations: Dict[str, List[str]]
 
+
+class CloudServiceAgent:
+    """Base agent class for cloud service recommendations"""
+    def __init__(self, service_category: str):
+        self.category = service_category
+        self.price_list = AWSPriceList()
+
+    def recommend(self, requirements: CustomerRequirement) -> List[ServiceRecommendation]:
+        raise NotImplementedError
+
+class ComputeAgent(CloudServiceAgent):
+    def recommend(self, requirements: CustomerRequirement) -> List[ServiceRecommendation]:
+        if requirements.workload_type == "Serverless":
+            return self._recommend_lambda(requirements)
+        return self._recommend_ec2(requirements)
+
+    def _recommend_ec2(self, requirements: CustomerRequirement) -> List[ServiceRecommendation]:
+        instance_types = self._get_suitable_instances(requirements)
+        monthly_cost = self._calculate_ec2_cost(instance_types[0], requirements)
+        
+        return [ServiceRecommendation(
+            service_name="Amazon EC2",
+            configuration={
+                "instance_type": instance_types[0],
+                "region": requirements.regions[0],
+                "auto_scaling": "Auto Scaling" in requirements.special_requirements
+            },
+            monthly_cost=monthly_cost,
+            justification=f"Selected {instance_types[0]} based on {requirements.performance_tier} tier requirements",
+            alternatives=["AWS Lambda", "AWS Fargate"]
+        )]
+
+    def _recommend_lambda(self, requirements: CustomerRequirement) -> List[ServiceRecommendation]:
+        monthly_cost = self._calculate_lambda_cost(requirements)
+        return [ServiceRecommendation(
+            service_name="AWS Lambda",
+            configuration={
+                "memory": 128,
+                "timeout": 30,
+                "concurrent_executions": requirements.expected_users // 100
+            },
+            monthly_cost=monthly_cost,
+            justification="Serverless compute for cost-effective scaling",
+            alternatives=["Amazon EC2", "AWS Fargate"]
+        )]
+
+    def _get_suitable_instances(self, requirements: CustomerRequirement) -> List[str]:
+        if requirements.performance_tier == "Development":
+            return ["t3.micro", "t3.small"]
+        elif requirements.performance_tier == "Production":
+            return ["t3.medium", "t3.large"]
+        else:  # Enterprise
+            return ["t3.xlarge", "t3.2xlarge"]
+
+    def _calculate_ec2_cost(self, instance_type: str, requirements: CustomerRequirement) -> float:
+        base_price = self.price_list._get_default_pricing("AmazonEC2").get(instance_type, 0.0)
+        hours_per_month = 730  # Average hours per month
+        return base_price * hours_per_month
+
+    def _calculate_lambda_cost(self, requirements: CustomerRequirement) -> float:
+        requests_per_month = requirements.expected_users * 100  # Estimated requests per user
+        gb_seconds = requests_per_month * 0.128 * 0.1  # 128MB, 100ms average
+        return (requests_per_month * 0.0000002) + (gb_seconds * 0.0000166667)
+
+class StorageAgent(CloudServiceAgent):
+    def recommend(self, requirements: CustomerRequirement) -> List[ServiceRecommendation]:
+        if requirements.data_volume_gb > 1000:
+            return self._recommend_s3(requirements)
+        return self._recommend_ebs(requirements)
+
+    def _recommend_s3(self, requirements: CustomerRequirement) -> List[ServiceRecommendation]:
+        monthly_cost = self._calculate_s3_cost(requirements)
+        return [ServiceRecommendation(
+            service_name="Amazon S3",
+            configuration={
+                "storage_class": "Standard",
+                "lifecycle_rules": requirements.data_volume_gb > 5000
+            },
+            monthly_cost=monthly_cost,
+            justification="Scalable object storage with high durability",
+            alternatives=["Amazon EFS", "Amazon EBS"]
+        )]
+
+    def _calculate_s3_cost(self, requirements: CustomerRequirement) -> float:
+        pricing = self.price_list._get_default_pricing("AmazonS3")
+        return requirements.data_volume_gb * pricing.get("standard", 0.023)
+
+    def _recommend_ebs(self, requirements: CustomerRequirement) -> List[ServiceRecommendation]:
+        monthly_cost = requirements.data_volume_gb * 0.10  # Simple EBS cost estimation
+        return [ServiceRecommendation(
+            service_name="Amazon EBS",
+            configuration={
+                "volume_type": "gp3",
+                "size_gb": requirements.data_volume_gb
+            },
+            monthly_cost=monthly_cost,
+            justification="Block storage for EC2 instances",
+            alternatives=["Amazon S3", "Amazon EFS"]
+        )]
+
+class DatabaseAgent(CloudServiceAgent):
+    def recommend(self, requirements: CustomerRequirement) -> List[ServiceRecommendation]:
+        monthly_cost = self._calculate_rds_cost(requirements)
+        return [ServiceRecommendation(
+            service_name="Amazon RDS",
+            configuration={
+                "instance_type": "db.t3.medium",
+                "engine": "PostgreSQL",
+                "multi_az": "High Availability" in requirements.special_requirements
+            },
+            monthly_cost=monthly_cost,
+            justification="Managed relational database service",
+            alternatives=["Amazon Aurora", "Amazon DynamoDB"]
+        )]
+
+    def _calculate_rds_cost(self, requirements: CustomerRequirement) -> float:
+        pricing = self.price_list._get_default_pricing("AmazonRDS")
+        base_cost = pricing.get("db.t3.medium", 0.068) * 730
+        storage_cost = requirements.data_volume_gb * 0.115
+        return base_cost + storage_cost
+
+class NetworkingAgent(CloudServiceAgent):
+    def recommend(self, requirements: CustomerRequirement) -> List[ServiceRecommendation]:
+        if "Content Delivery" in requirements.special_requirements:
+            return self._recommend_cloudfront(requirements)
+        return []
+
+    def _recommend_cloudfront(self, requirements: CustomerRequirement) -> List[ServiceRecommendation]:
+        monthly_cost = self._calculate_cloudfront_cost(requirements)
+        return [ServiceRecommendation(
+            service_name="Amazon CloudFront",
+            configuration={
+                "price_class": "PriceClass_100",
+                "ssl_certificate": "ACM"
+            },
+            monthly_cost=monthly_cost,
+            justification="Global content delivery network",
+            alternatives=["AWS Global Accelerator"]
+        )]
+
+    def _calculate_cloudfront_cost(self, requirements: CustomerRequirement) -> float:
+        data_transfer_gb = requirements.data_volume_gb * 0.5  # Estimate 50% of data through CDN
+        return data_transfer_gb * 0.085  # Average cost per GB
+
+class SecurityAgent(CloudServiceAgent):
+    def recommend(self, requirements: CustomerRequirement) -> List[ServiceRecommendation]:
+        if requirements.compliance_needs:
+            return self._recommend_security_services(requirements)
+        return []
+
+    def _recommend_security_services(self, requirements: CustomerRequirement) -> List[ServiceRecommendation]:
+        monthly_cost = 20.0  # Base WAF cost
+        return [ServiceRecommendation(
+            service_name="AWS WAF",
+            configuration={
+                "rules": ["SQL injection", "Cross-site scripting"]
+            },
+            monthly_cost=monthly_cost,
+            justification="Web application firewall for security compliance",
+            alternatives=["Third-party WAF"]
+        )]
+
+# ...rest of your existing code...
+
 # ... Rest of your existing agent classes (ComputeAgent, StorageAgent, etc.) ...
 
 class CloudPackageBuilder:
