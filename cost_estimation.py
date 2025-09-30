@@ -53,7 +53,6 @@ AWS_SERVICES = {
 }
 
 # Add this new class for service selection
-# Add after AWS_SERVICES dictionary
 class ServiceSelector:
     @staticmethod
     def render_service_selection() -> Dict[str, List[str]]:
@@ -171,6 +170,54 @@ class InnovativePricing:
             
             base_price = (acls * SECURITY_PRICING['WAF']['price_per_acl'] +
                          rules * SECURITY_PRICING['WAF']['price_per_rule'])
+            
+        elif service == "Amazon EKS":
+            # EKS pricing: $0.10 per hour per cluster
+            cluster_hours = config.get('cluster_hours', 730)  # Default: 24*30.5 = 730 hours/month
+            base_price = cluster_hours * EKS_PRICING['cluster_per_hour']
+            
+            # Add node group costs (EC2 instances)
+            node_count = config.get('node_count', 2)
+            node_instance_type = config.get('node_instance_type', 't3.medium')
+            
+            # Find the instance price
+            node_price_per_hour = 0.0
+            for family in INSTANCE_FAMILIES.values():
+                if node_instance_type in family:
+                    node_price_per_hour = family[node_instance_type]['Price']
+                    break
+            
+            # Calculate total node cost
+            node_cost = node_count * node_price_per_hour * cluster_hours
+            base_price += node_cost
+            
+            # Add load balancer cost if applicable
+            if config.get('load_balancer', False):
+                base_price += NETWORKING_PRICING['ELB']['Application'] * cluster_hours
+            
+        elif service == "Amazon ECS":
+            # ECS pricing depends on launch type
+            launch_type = config.get('launch_type', 'Fargate')
+            tasks = config.get('tasks', 1)
+            
+            if launch_type == "Fargate":
+                vcpu = config.get('vcpu', 0.5)
+                memory_gb = config.get('memory_gb', 1.0)
+                
+                # Fargate pricing: $0.04048 per vCPU/hour + $0.004445 per GB/hour
+                price_per_hour = (vcpu * 0.04048) + (memory_gb * 0.004445)
+                base_price = price_per_hour * cluster_hours * tasks
+                
+            elif launch_type == "EC2":
+                # EC2 launch type - use EC2 instance pricing
+                instance_type = config.get('instance_type', 't3.medium')
+                instance_count = config.get('instance_count', 1)
+                
+                for family in INSTANCE_FAMILIES.values():
+                    if instance_type in family:
+                        instance_price = family[instance_type]['Price']
+                        base_price = instance_price * cluster_hours * instance_count
+                        break
         
         # Apply multipliers
         final_price = (
@@ -187,6 +234,13 @@ class InnovativePricing:
             final_price *= 0.85  # Additional 15% discount
             
         return final_price
+
+# Add EKS pricing configuration
+EKS_PRICING = {
+    "cluster_per_hour": 0.10,  # $0.10 per hour per EKS cluster
+    "node_group_per_hour": 0.0,  # Node groups use EC2 pricing
+}
+
 # Add after the InnovativePricing class
 INSTANCE_FAMILIES = {
     "General Purpose": {
@@ -280,6 +334,7 @@ SECURITY_PRICING = {
 def render_service_configurator(service: str, key_prefix: str) -> Dict:
     """Render configuration options for selected service"""
     config = {}
+    
     if service == "Amazon EC2":
         st.markdown("##### Instance Configuration")
         family = st.selectbox(
@@ -307,6 +362,63 @@ def render_service_configurator(service: str, key_prefix: str) -> Dict:
             "instance_count": st.number_input("Number of Instances", 1, 100, 1, key=f"{key_prefix}_count"),
             "storage_gb": st.number_input("EBS Storage (GB)", 8, 16384, 30, key=f"{key_prefix}_storage")
         })
+        
+    elif service == "Amazon EKS":
+        st.markdown("##### EKS Cluster Configuration")
+        
+        # Cluster configuration
+        col1, col2 = st.columns(2)
+        with col1:
+            node_count = st.number_input("Number of Worker Nodes", 1, 100, 2, key=f"{key_prefix}_nodes")
+        with col2:
+            cluster_hours = st.number_input("Cluster Hours/Month", 1, 744, 730, key=f"{key_prefix}_hours")
+        
+        # Node instance type
+        family = st.selectbox(
+            "Node Instance Family",
+            list(INSTANCE_FAMILIES.keys()),
+            key=f"{key_prefix}_node_family"
+        )
+        node_instance_types = list(INSTANCE_FAMILIES[family].keys())
+        node_instance_type = st.selectbox(
+            "Node Instance Type",
+            node_instance_types,
+            key=f"{key_prefix}_node_type"
+        )
+        
+        # Display node specs
+        node_specs = INSTANCE_FAMILIES[family][node_instance_type]
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.metric("Node vCPU", node_specs["vCPU"])
+        with col2:
+            st.metric("Node Memory (GiB)", node_specs["Memory"])
+        with col3:
+            st.metric("Node Price/Hour", f"${node_specs['Price']}")
+        
+        # Additional options
+        load_balancer = st.checkbox("Add Application Load Balancer", value=True, key=f"{key_prefix}_alb")
+        auto_scaling = st.checkbox("Enable Auto Scaling", value=True, key=f"{key_prefix}_asg")
+        
+        config.update({
+            "node_count": node_count,
+            "node_instance_type": node_instance_type,
+            "cluster_hours": cluster_hours,
+            "load_balancer": load_balancer,
+            "auto_scaling": auto_scaling
+        })
+        
+        # Calculate and display estimated cost
+        cluster_cost = cluster_hours * EKS_PRICING['cluster_per_hour']
+        node_cost = node_count * node_specs['Price'] * cluster_hours
+        total_estimated = cluster_cost + node_cost
+        
+        if load_balancer:
+            alb_cost = NETWORKING_PRICING['ELB']['Application'] * cluster_hours
+            total_estimated += alb_cost
+        
+        st.metric("Estimated Monthly Cost", f"${total_estimated:,.2f}")
+        
     elif service == "Amazon ECS":
         st.markdown("##### Container Configuration")
         launch_type = st.radio(
@@ -345,6 +457,7 @@ def render_service_configurator(service: str, key_prefix: str) -> Dict:
             price_per_task_month = price_per_task_hour * 24 * 30  # Assuming 30 days in a month
             total_price = price_per_task_month * tasks
             st.metric("Estimated Monthly Cost", f"${total_price:,.2f}")
+            
     elif service == "Amazon RDS":
         st.markdown("##### Database Configuration")
         engine = st.selectbox(
@@ -372,6 +485,7 @@ def render_service_configurator(service: str, key_prefix: str) -> Dict:
             "storage_gb": storage,
             "multi_az": multi_az
         })
+        
     elif service == "Amazon S3":
         st.markdown("##### Storage Configuration")
         storage_class = st.selectbox(
@@ -387,6 +501,7 @@ def render_service_configurator(service: str, key_prefix: str) -> Dict:
             "storage_class": storage_class,
             "storage_gb": storage
         })
+        
     elif service == "Amazon Bedrock":
         st.markdown("##### Model Configuration")
         model = st.selectbox(
@@ -405,55 +520,16 @@ def render_service_configurator(service: str, key_prefix: str) -> Dict:
             "requests_per_month": requests,
             "avg_tokens": tokens
         })
+    
+    # Region selection for all services
     config["region"] = st.selectbox(
         "Region",
         ["us-east-1", "us-west-2", "eu-west-1", "ap-southeast-1"],
         key=f"{key_prefix}_region"
     )
+    
     return config
 
-# Update the main function to pass unique keys
-def main():
-    # ... existing code ...
-    
-    if st.button("Generate Configuration", type="primary"):
-        if not selected_services:
-            st.warning("⚠️ Please select at least one service")
-            return
-        
-        st.header("🛠️ Service Configuration")
-        
-        total_cost = 0
-        configurations = {}
-        
-        # Configure each selected service with unique keys
-        for category, services in selected_services.items():
-            st.subheader(f"{category} Services")
-            
-            for i, service in enumerate(services):
-                with st.expander(f"⚙️ {service}", expanded=True):
-                    st.markdown(f"*{AWS_SERVICES[category][service]}*")
-                    
-                    # Generate unique key for each service configuration
-                    service_key = f"{category}_{service}_{i}"
-                    config = render_service_configurator(service, service_key)
-                    cost = InnovativePricing.calculate_price(
-                        service, config, usage_pattern
-                    )
-                    
-                    st.metric("Estimated Monthly Cost", f"${cost:,.2f}")
-                    total_cost += cost
-                    
-                    configurations[service] = {
-                        "config": config,
-                        "cost": cost
-                    }
-        
-        # ... rest of the main function ...
-
-
-# Modify the main function
-# Remove the duplicate main() functions and replace with this single version:
 def main():
     st.set_page_config(page_title="AWS Cloud Package Builder", layout="wide")
     st.title("🚀 AWS Cloud Package Builder")
