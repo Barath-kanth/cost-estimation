@@ -558,6 +558,7 @@ def render_service_configurator(service: str) -> Dict:
     
     return config
 # Modify the main function
+# Remove the duplicate main() functions and replace with this single version:
 def main():
     st.set_page_config(page_title="AWS Cloud Package Builder", layout="wide")
     st.title("🚀 AWS Cloud Package Builder")
@@ -588,7 +589,7 @@ def main():
     # Service Selection
     selected_services = ServiceSelector.render_service_selection()
     
-    if st.button("Generate Configuration", type="primary"):
+    if st.button("Generate Configuration", type="primary", key="generate_config"):
         if not selected_services:
             st.warning("⚠️ Please select at least one service")
             return
@@ -598,15 +599,17 @@ def main():
         total_cost = 0
         configurations = {}
         
-        # Configure each selected service
+        # Configure each selected service with unique keys
         for category, services in selected_services.items():
             st.subheader(f"{category} Services")
             
-            for service in services:
+            for i, service in enumerate(services):
                 with st.expander(f"⚙️ {service}", expanded=True):
                     st.markdown(f"*{AWS_SERVICES[category][service]}*")
                     
-                    config = render_service_configurator(service)
+                    # Generate unique key for each service configuration
+                    service_key = f"{category}_{service}_{i}"
+                    config = render_service_configurator(service, service_key)
                     cost = InnovativePricing.calculate_price(
                         service, config, usage_pattern
                     )
@@ -645,43 +648,10 @@ def main():
                 "services": configurations
             }, indent=2),
             file_name="aws_config.json",
-            mime="application/json"
+            mime="application/json",
+            key="download_config"
         )
 
-def main():
-    # ... existing code ...
-    
-    if st.button("Generate Configuration", type="primary"):
-        if not selected_services:
-            st.warning("⚠️ Please select at least one service")
-            return
-        
-        st.header("🛠️ Service Configuration")
-        
-        total_cost = 0
-        configurations = {}
-        
-        # Configure each selected service with unique keys
-        for category, services in selected_services.items():
-            st.subheader(f"{category} Services")
-            
-            for i, service in enumerate(services):
-                with st.expander(f"⚙️ {service}", expanded=True):
-                    st.markdown(f"*{AWS_SERVICES[category][service]}*")
-                    
-                    # Generate unique key for each service configuration
-                    service_key = f"{category}_{service}_{i}"
-                    config = render_service_configurator(service, service_key)
-                    cost = InnovativePricing.calculate_price(
-                        service, config, usage_pattern
-                    )
-                    
-                    st.metric("Estimated Monthly Cost", f"${cost:,.2f}")
-                    total_cost += cost
-                    
-                    configurations[service] = {
-                        "config": config,
-                        "cost": cost
-                    }
+# Make sure this is at the end of the file
 if __name__ == "__main__":
     main()
