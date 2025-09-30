@@ -146,9 +146,14 @@ class InnovativePricing:
             memory_mb = config.get('memory_mb', 128)
             requests = config.get('requests_per_month', 1000000)
             duration_ms = config.get('avg_duration_ms', 100)
-            
+    
             gb_seconds = (requests * duration_ms * memory_mb) / (1000 * 1024)
             base_price = (requests * 0.0000002) + (gb_seconds * 0.0000166667)
+    
+    # Apply region multiplier for Lambda
+    region = config.get('region', 'us-east-1')
+    base_price *= region_multipliers.get(region, 1.0)
+
             
         elif service == "Amazon Bedrock":
             model = config.get('model', 'Claude')
