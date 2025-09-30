@@ -275,15 +275,13 @@ def render_service_configurator(service: str, key_prefix: str) -> Dict:
     if service == "Amazon EC2":
         st.markdown("##### Instance Configuration")
         
-        # Instance family selection
         family = st.selectbox(
             "Instance Family",
             list(INSTANCE_FAMILIES.keys()),
-            help="Choose instance family based on your workload",
+            help="Choose instance family based on workload",
             key=f"{key_prefix}_family"
         )
         
-        # Instance type selection with specs display
         instance_types = list(INSTANCE_FAMILIES[family].keys())
         selected_type = st.selectbox(
             "Instance Type", 
@@ -300,17 +298,37 @@ def render_service_configurator(service: str, key_prefix: str) -> Dict:
         with col3:
             st.metric("Price/Hour", f"${specs['Price']}")
         
-        config["instance_type"] = selected_type
-        config["instance_count"] = st.number_input(
-            "Number of Instances", 
-            1, 100, 1,
-            key=f"{key_prefix}_count"
+        config.update({
+            "instance_type": selected_type,
+            "instance_count": st.number_input("Number of Instances", 1, 100, 1, key=f"{key_prefix}_count"),
+            "storage_gb": st.number_input("EBS Storage (GB)", 8, 16384, 30, key=f"{key_prefix}_storage")
+        })
+    
+    elif service == "Amazon ECS":
+        st.markdown("##### Container Configuration")
+        
+        launch_type = st.radio(
+            "Launch Type",
+            ["Fargate", "EC2"],
+            key=f"{key_prefix}_launch_type"
         )
-        config["storage_gb"] = st.number_input(
-            "EBS Storage per Instance (GB)", 
-            8, 16384, 30,
-            key=f"{key_prefix}_storage"
-        )
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            vcpu = st.number_input("vCPU Units", 0.25, 4.0, 0.5, 0.25, key=f"{key_prefix}_vcpu")
+            st.metric("vCPU", vcpu)
+        with col2:
+            memory = st.number_input("Memory (GB)", 0.5, 30.0, 1.0, 0.5, key=f"{key_prefix}_memory")
+            st.metric("Memory (GB)", memory)
+        
+        tasks = st.number_input("Number of Tasks", 1, 100, 1, key=f"{key_prefix}_tasks")
+        
+        config.update({
+            "launch_type": launch_type,
+            "vcpu": vcpu,
+            "memory_gb": memory,
+            "tasks": tasks
+        })
     
     elif service == "Amazon RDS":
         st.markdown("##### Database Configuration")
@@ -329,30 +347,20 @@ def render_service_configurator(service: str, key_prefix: str) -> Dict:
         )
         specs = DATABASE_PRICING[engine][selected_type]
         
-        col1, col2, col3 = st.columns(3)
+        col1, col2 = st.columns(2)
         with col1:
             st.metric("vCPU", specs["vCPU"])
+            storage = st.number_input("Storage (GB)", 20, 65536, 100, key=f"{key_prefix}_storage")
         with col2:
             st.metric("Memory (GiB)", specs["Memory"])
-        with col3:
-            st.metric("Price/Hour", f"${specs['Price']}")
+            multi_az = st.checkbox("Multi-AZ Deployment", key=f"{key_prefix}_multiaz")
         
-        config["engine"] = engine
-        config["instance_type"] = selected_type
-        config["storage_gb"] = st.number_input(
-            "Storage (GB)", 
-            20, 65536, 100,
-            key=f"{key_prefix}_storage"
-        )
-        config["multi_az"] = st.checkbox(
-            "Multi-AZ Deployment",
-            key=f"{key_prefix}_multiaz"
-        )
-        config["backup_retention"] = st.slider(
-            "Backup Retention (Days)", 
-            0, 35, 7,
-            key=f"{key_prefix}_backup"
-        )
+        config.update({
+            "engine": engine,
+            "instance_type": selected_type,
+            "storage_gb": storage,
+            "multi_az": multi_az
+        })
     
     elif service == "Amazon S3":
         st.markdown("##### Storage Configuration")
@@ -365,22 +373,44 @@ def render_service_configurator(service: str, key_prefix: str) -> Dict:
         
         col1, col2 = st.columns(2)
         with col1:
-            storage_gb = st.number_input(
-                "Storage (GB)", 
-                1, 1000000, 100,
-                key=f"{key_prefix}_storage"
-            )
+            storage = st.number_input("Storage (GB)", 1, 1000000, 100, key=f"{key_prefix}_storage")
             st.metric("Price/GB/Month", f"${STORAGE_PRICING[storage_class]}")
-        with col2:
-            requests_per_month = st.number_input(
-                "Monthly Requests (thousands)",
-                1, 1000000, 100,
-                key=f"{key_prefix}_requests"
-            ) * 1000
         
-        config["storage_class"] = storage_class
-        config["storage_gb"] = storage_gb
-        config["requests_per_month"] = requests_per_month
+        config.update({
+            "storage_class": storage_class,
+            "storage_gb": storage
+        })
+    
+    elif service == "Amazon Bedrock":
+        st.markdown("##### Model Configuration")
+        
+        model = st.selectbox(
+            "Foundation Model",
+            list(AI_ML_PRICING["Bedrock"].keys()),
+            key=f"{key_prefix}_model"
+        )
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            requests = st.number_input("Monthly Requests", 1000, 10000000, 10000, key=f"{key_prefix}_requests")
+        with col2:
+            tokens = st.number_input("Avg Tokens/Request", 100, 10000, 1000, key=f"{key_prefix}_tokens")
+        
+        st.metric("Price/1K Tokens", f"${AI_ML_PRICING['Bedrock'][model]}")
+        
+        config.update({
+            "model": model,
+            "requests_per_month": requests,
+            "avg_tokens": tokens
+        })
+    
+    config["region"] = st.selectbox(
+        "Region",
+        ["us-east-1", "us-west-2", "eu-west-1", "ap-southeast-1"],
+        key=f"{key_prefix}_region"
+    )
+    
+    return config
     
     # ... Add configurations for other services with unique keys ...
     
