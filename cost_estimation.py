@@ -16,6 +16,51 @@ def inject_custom_css():
     * {
         color: #1e293b !important;
     }
+
+        /* Fix for dropdown/select box text visibility */
+    div[data-baseweb="select"] > div {
+        color: #1e293b !important;
+    }
+
+    div[data-baseweb="select"] span {
+        color: #1e293b !important;
+    }
+
+    /* Fix for select box options */
+    [data-baseweb="popover"] * {
+        color: #1e293b !important;
+    }
+
+    /* Fix for number input text */
+    input[type="number"] {
+        color: #1e293b !important;
+    }
+
+    /* Fix for all input elements */
+    input {
+        color: #1e293b !important;
+    }
+
+    /* Force visibility on base web components */
+    [data-baseweb] {
+        color: #1e293b !important;
+    }
+
+    [data-baseweb] * {
+        color: #1e293b !important;
+    }
+
+    /* Streamlit specific widget text */
+    .st-emotion-cache-16idsys p,
+    .st-emotion-cache-16idsys span,
+    .st-emotion-cache-16idsys div {
+        color: #1e293b !important;
+    }
+
+    /* Fix for metric labels and values */
+    [data-testid="metric-container"] * {
+        color: #1e293b !important;
+}
     
     /* Main app background */
     .main {
