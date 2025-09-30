@@ -44,30 +44,7 @@ AWS_SERVICES = {
 }
 
 # Add this new class for service selection
-class ServiceSelector:
-    def render_service_selection() -> Dict[str, List[str]]:
-        """Render service selection UI and return selected services"""
-        st.subheader("🎯 Select AWS Services")
-        
-        selected_services = {}
-        
-        # Use tabs for service categories
-        tabs = st.tabs(list(AWS_SERVICES.keys()))
-        for i, (category, services) in enumerate(AWS_SERVICES.items()):
-            with tabs[i]:
-                st.markdown(f"### {category} Services")
-                
-                # Create columns for better layout
-                cols = st.columns(2)
-                for j, (service, description) in enumerate(services.items()):
-                    col_idx = j % 2
-                    with cols[col_idx]:
-                        if st.checkbox(f"{service}", help=description):
-                            if category not in selected_services:
-                                selected_services[category] = []
-                            selected_services[category].append(service)
-        
-        return selected_services
+
 
 # Add this new class for innovative pricing
 class InnovativePricing:
@@ -570,21 +547,36 @@ def main():
             workload_type = st.selectbox(
                 "Workload Type",
                 ["Web Application", "Data Processing", "Machine Learning", 
-                 "Microservices", "Serverless", "Container-based"]
+                 "Microservices", "Serverless", "Container-based"],
+                key="workload_type"
             )
-            monthly_budget = st.number_input("Monthly Budget ($)", 100, 1000000, 5000)
+            monthly_budget = st.number_input(
+                "Monthly Budget ($)", 
+                100, 1000000, 5000,
+                key="monthly_budget"
+            )
             performance_tier = st.selectbox(
                 "Performance Tier", 
-                ["Development", "Production", "Enterprise"]
+                ["Development", "Production", "Enterprise"],
+                key="performance_tier"
             )
         with col2:
             usage_pattern = st.selectbox(
                 "Usage Pattern",
                 ["sporadic", "normal", "intensive"],
-                help="How will the services be used?"
+                help="How will the services be used?",
+                key="usage_pattern"
             )
-            data_volume_gb = st.number_input("Data Volume (GB)", 1, 100000, 100)
-            expected_users = st.number_input("Expected Users", 1, 1000000, 1000)
+            data_volume_gb = st.number_input(
+                "Data Volume (GB)", 
+                1, 100000, 100,
+                key="data_volume"
+            )
+            expected_users = st.number_input(
+                "Expected Users", 
+                1, 1000000, 1000,
+                key="expected_users"
+            )
     
     # Service Selection
     selected_services = ServiceSelector.render_service_selection()
@@ -609,18 +601,28 @@ def main():
                     
                     # Generate unique key for each service configuration
                     service_key = f"{category}_{service}_{i}"
-                    config = render_service_configurator(service, service_key)
-                    cost = InnovativePricing.calculate_price(
-                        service, config, usage_pattern
-                    )
-                    
-                    st.metric("Estimated Monthly Cost", f"${cost:,.2f}")
-                    total_cost += cost
-                    
-                    configurations[service] = {
-                        "config": config,
-                        "cost": cost
-                    }
+                    try:
+                        config = render_service_configurator(service, service_key)
+                        cost = InnovativePricing.calculate_price(
+                            service, 
+                            config, 
+                            usage_pattern
+                        )
+                        
+                        st.metric(
+                            "Estimated Monthly Cost", 
+                            f"${cost:,.2f}",
+                            key=f"{service_key}_cost"
+                        )
+                        total_cost += cost
+                        
+                        configurations[service] = {
+                            "config": config,
+                            "cost": cost
+                        }
+                    except Exception as e:
+                        st.error(f"Error configuring {service}: {str(e)}")
+                        continue
         
         # Cost Summary
         st.header("💰 Cost Summary")
@@ -652,6 +654,5 @@ def main():
             key="download_config"
         )
 
-# Make sure this is at the end of the file
 if __name__ == "__main__":
     main()
