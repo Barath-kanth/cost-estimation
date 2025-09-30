@@ -8,6 +8,15 @@ import pandas as pd
 from concurrent.futures import ThreadPoolExecutor
 import time
 
+def initialize_session_state():
+    """Initialize session state variables"""
+    if 'configurations' not in st.session_state:
+        st.session_state.configurations = {}
+    if 'selected_services' not in st.session_state:
+        st.session_state.selected_services = {}
+    if 'total_cost' not in st.session_state:
+        st.session_state.total_cost = 0.0
+
 # Add this after imports
 AWS_SERVICES = {
     "Compute": {
@@ -469,6 +478,9 @@ def main():
     st.set_page_config(page_title="AWS Cloud Package Builder", layout="wide")
     st.title("🚀 AWS Cloud Package Builder")
     
+    # Initialize session state
+    initialize_session_state()
+    
     # Project Requirements
     with st.expander("📋 Project Requirements", expanded=True):
         col1, col2 = st.columns(2)
@@ -508,19 +520,16 @@ def main():
             )
     
     # Service Selection
-    selected_services = ServiceSelector.render_service_selection()
+    st.session_state.selected_services = ServiceSelector.render_service_selection()
     
-    if st.button("Generate Configuration", type="primary", key="generate_config"):
-        if not selected_services:
-            st.warning("⚠️ Please select at least one service")
-            return
-        
+    # Always show configurations if services are selected
+    if st.session_state.selected_services:
         st.header("🛠️ Service Configuration")
         
-        total_cost = 0
-        configurations = {}
+        st.session_state.total_cost = 0
+        st.session_state.configurations = {}
         
-        for category, services in selected_services.items():
+        for category, services in st.session_state.selected_services.items():
             st.subheader(f"{category} Services")
             
             for i, service in enumerate(services):
@@ -528,14 +537,25 @@ def main():
                     st.markdown(f"*{AWS_SERVICES[category][service]}*")
                     
                     service_key = f"{category}_{service}_{i}"
+                    
+                    # Store configuration in session state
+                    if service_key not in st.session_state:
+                        st.session_state[service_key] = {}
+                    
                     config = render_service_configurator(service, service_key)
-                    cost = InnovativePricing.calculate_price(service, config, usage_pattern)
+                    st.session_state[service_key].update(config)
                     
-                    st.metric("Estimated Monthly Cost", f"${cost:,.2f}")  # Removed key parameter
-                    total_cost += cost
+                    cost = InnovativePricing.calculate_price(
+                        service, 
+                        st.session_state[service_key],
+                        usage_pattern
+                    )
                     
-                    configurations[service] = {
-                        "config": config,
+                    st.metric("Estimated Monthly Cost", f"${cost:,.2f}")
+                    st.session_state.total_cost += cost
+                    
+                    st.session_state.configurations[service] = {
+                        "config": st.session_state[service_key],
                         "cost": cost
                     }
         
@@ -543,11 +563,11 @@ def main():
         st.header("💰 Cost Summary")
         col1, col2, col3 = st.columns(3)
         with col1:
-            st.metric("Total Monthly Cost", f"${total_cost:,.2f}")
+            st.metric("Total Monthly Cost", f"${st.session_state.total_cost:,.2f}")
         with col2:
-            st.metric("Services Selected", len(configurations))
+            st.metric("Services Selected", len(st.session_state.configurations))
         with col3:
-            budget_used = (total_cost / monthly_budget) * 100
+            budget_used = (st.session_state.total_cost / monthly_budget) * 100
             st.metric("Budget Utilized", f"{budget_used:.1f}%")
         
         # Export Configuration
@@ -562,7 +582,7 @@ def main():
                     "data_volume_gb": data_volume_gb,
                     "expected_users": expected_users
                 },
-                "services": configurations
+                "services": st.session_state.configurations
             }, indent=2),
             file_name="aws_config.json",
             mime="application/json",
