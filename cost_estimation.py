@@ -8,272 +8,195 @@ import pandas as pd
 from concurrent.futures import ThreadPoolExecutor
 import time
 
-# Custom CSS for TwinCoreTech color scheme with proper text visibility
+# Simple and effective CSS for text visibility
 def inject_custom_css():
     st.markdown("""
     <style>
-    /* TwinCoreTech Color Scheme */
-    :root {
-        --primary: #2563eb;      /* Blue - Primary brand color */
-        --primary-dark: #1d4ed8; /* Darker blue */
-        --secondary: #059669;    /* Green - Secondary brand color */
-        --accent: #7c3aed;      /* Purple - Accent color */
-        --background: #ffffff;   /* White background */
-        --card-bg: #f8fafc;     /* Light gray card background */
-        --text: #1e293b;        /* Dark gray text */
-        --text-light: #64748b;  /* Light gray text */
-        --border: #e2e8f0;      /* Border color */
-        --success: #10b981;     /* Success green */
-        --warning: #f59e0b;     /* Warning amber */
-        --error: #ef4444;       /* Error red */
+    /* Reset all text to be visible */
+    * {
+        color: #1e293b !important;
     }
     
-    /* Main app styling */
+    /* Main app background */
     .main {
-        background-color: var(--background);
+        background-color: #ffffff;
     }
     
     .stApp {
-        background-color: var(--background);
-    }
-    
-    /* Fix ALL text colors - this is the most important fix */
-    * {
-        color: var(--text) !important;
+        background-color: #ffffff;
     }
     
     /* Headers */
     h1, h2, h3, h4, h5, h6 {
-        color: var(--text) !important;
+        color: #1e293b !important;
         font-weight: 600 !important;
     }
     
     h1 {
-        color: var(--primary) !important;
-        border-bottom: 3px solid var(--primary);
+        color: #2563eb !important;
+        border-bottom: 3px solid #2563eb;
         padding-bottom: 0.5rem;
-        margin-bottom: 2rem !important;
     }
     
-    /* Paragraphs and general text */
-    p, span, div {
-        color: var(--text) !important;
+    /* Make sure ALL Streamlit text is visible */
+    .stMarkdown, .stMarkdown p, .stMarkdown span, .stMarkdown div {
+        color: #1e293b !important;
     }
     
-    /* Cards and containers */
+    /* Form labels */
+    .stCheckbox label, 
+    .stSelectbox label, 
+    .stNumberInput label, 
+    .stTextInput label, 
+    .stRadio label, 
+    .stSlider label,
+    .stMultiselect label,
+    .stSelectSlider label {
+        color: #1e293b !important;
+        font-weight: 500 !important;
+    }
+    
+    /* Expander headers */
+    .streamlit-expanderHeader {
+        color: #1e293b !important;
+        font-weight: 600 !important;
+    }
+    
+    /* Cards */
     .stExpander {
-        background-color: var(--card-bg) !important;
+        background-color: #f8fafc !important;
+        border: 1px solid #e2e8f0 !important;
         border-radius: 8px !important;
-        border: 1px solid var(--border) !important;
-        box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1) !important;
-    }
-    
-    .stExpander > div > div {
-        background-color: var(--card-bg) !important;
     }
     
     /* Buttons */
     .stButton > button {
-        background-color: var(--primary) !important;
+        background-color: #2563eb !important;
         color: white !important;
         border: none !important;
         border-radius: 6px !important;
-        padding: 0.5rem 1rem !important;
         font-weight: 500 !important;
-        transition: all 0.2s ease !important;
     }
     
     .stButton > button:hover {
-        background-color: var(--primary-dark) !important;
-        transform: translateY(-1px) !important;
-        box-shadow: 0 4px 6px -1px rgba(37, 99, 235, 0.3) !important;
+        background-color: #1d4ed8 !important;
+    }
+    
+    /* Download button */
+    .stDownloadButton > button {
+        background-color: #059669 !important;
+        color: white !important;
     }
     
     /* Metrics */
     [data-testid="stMetricValue"] {
-        color: var(--primary) !important;
+        color: #2563eb !important;
         font-weight: 700 !important;
-        font-size: 1.5rem !important;
     }
     
     [data-testid="stMetricLabel"] {
-        color: var(--text-light) !important;
+        color: #64748b !important;
         font-weight: 500 !important;
     }
     
     /* Tabs */
     .stTabs [data-baseweb="tab-list"] {
+        background-color: #f8fafc;
         gap: 4px;
-        background-color: var(--card-bg);
         padding: 4px;
-        border-radius: 8px;
     }
     
     .stTabs [data-baseweb="tab"] {
         background-color: transparent !important;
-        border-radius: 6px !important;
-        padding: 10px 16px !important;
-        font-weight: 500 !important;
-        color: var(--text-light) !important;
+        color: #64748b !important;
     }
     
     .stTabs [aria-selected="true"] {
-        background-color: var(--primary) !important;
+        background-color: #2563eb !important;
         color: white !important;
     }
     
-    /* Form elements - ensure labels are visible */
-    .stCheckbox label, .stSelectbox label, .stNumberInput label, 
-    .stTextInput label, .stRadio label, .stSlider label,
-    .stMultiselect label {
-        color: var(--text) !important;
-        font-weight: 500 !important;
+    /* Input fields */
+    .stSelectbox [data-baseweb="select"],
+    .stNumberInput [data-baseweb="input"],
+    .stTextInput [data-baseweb="input"] {
+        border-radius: 6px !important;
+        border-color: #e2e8f0 !important;
     }
     
     /* Checkboxes */
     .stCheckbox [data-baseweb="checkbox"] {
         background-color: white !important;
-        border-color: var(--border) !important;
+        border-color: #e2e8f0 !important;
     }
     
     .stCheckbox [data-baseweb="checkbox"]:checked {
-        background-color: var(--primary) !important;
-        border-color: var(--primary) !important;
-    }
-    
-    /* Select boxes */
-    .stSelectbox [data-baseweb="select"] {
-        border-radius: 6px !important;
-        border-color: var(--border) !important;
-    }
-    
-    /* Number input */
-    .stNumberInput [data-baseweb="input"] {
-        border-radius: 6px !important;
-        border-color: var(--border) !important;
-    }
-    
-    /* Text input */
-    .stTextInput [data-baseweb="input"] {
-        border-radius: 6px !important;
-        border-color: var(--border) !important;
-    }
-    
-    /* Sliders */
-    .stSlider [data-baseweb="slider"] {
-        color: var(--primary) !important;
+        background-color: #2563eb !important;
+        border-color: #2563eb !important;
     }
     
     /* Radio buttons */
     .stRadio [data-baseweb="radio"] div:first-child {
         background-color: white !important;
-        border-color: var(--border) !important;
+        border-color: #e2e8f0 !important;
     }
     
     .stRadio [data-baseweb="radio"] div:first-child[data-is-active="true"] {
-        background-color: var(--primary) !important;
-        border-color: var(--primary) !important;
+        background-color: #2563eb !important;
+        border-color: #2563eb !important;
     }
     
-    /* Select slider */
-    .stSelectSlider label {
-        color: var(--text) !important;
-    }
-    
-    /* Success/Warning/Error messages */
-    .stAlert {
-        border-radius: 8px !important;
-        border: 1px solid !important;
-    }
-    
-    .stAlert [data-testid="stMarkdownContainer"] {
-        color: inherit !important;
-    }
-    
-    /* Download button */
-    .stDownloadButton > button {
-        background-color: var(--secondary) !important;
-        color: white !important;
-        border: none !important;
-        border-radius: 6px !important;
-        padding: 0.75rem 1.5rem !important;
-        font-weight: 600 !important;
-    }
-    
-    .stDownloadButton > button:hover {
-        background-color: #047857 !important;
-        transform: translateY(-1px) !important;
-    }
-    
-    /* Custom card styling */
-    .custom-card {
-        background: var(--card-bg);
-        border-radius: 8px;
-        padding: 1.5rem;
-        border: 1px solid var(--border);
-        margin-bottom: 1rem;
-    }
-    
-    .custom-card h3, .custom-card p {
-        color: var(--text) !important;
-        margin: 0;
-    }
-    
-    .custom-card h3 {
-        margin-bottom: 0.5rem !important;
+    /* Help text */
+    [data-testid="stHelp"] {
+        color: #64748b !important;
     }
     
     /* Progress bar */
     .stProgress > div > div > div {
-        background-color: var(--primary) !important;
+        background-color: #2563eb !important;
     }
     
-    /* Expander header - fix text color */
-    .streamlit-expanderHeader {
-        color: var(--text) !important;
-        font-weight: 600 !important;
+    /* Alerts */
+    .stAlert {
+        border-radius: 8px !important;
     }
     
-    /* Fix help text */
-    [data-testid="stHelp"] {
-        color: var(--text-light) !important;
+    /* Custom card */
+    .custom-card {
+        background: #f8fafc;
+        border: 1px solid #e2e8f0;
+        border-radius: 8px;
+        padding: 1.5rem;
+        margin-bottom: 1rem;
     }
     
-    /* Ensure all Streamlit text elements are visible */
-    .stMarkdown, .stMarkdown p, .stMarkdown span {
-        color: var(--text) !important;
+    /* Ensure widget values are visible */
+    [data-baseweb="select"] div,
+    [data-baseweb="input"] input {
+        color: #1e293b !important;
     }
     
-    /* Fix selectbox options */
-    [data-baseweb="popover"] {
-        color: var(--text) !important;
+    /* Fix any remaining invisible text */
+    div[class*="st-"] {
+        color: #1e293b !important;
     }
     
-    /* Fix multiselect */
-    .stMultiSelect [data-baseweb="tag"] {
-        background-color: var(--primary) !important;
-        color: white !important;
+    span[class*="st-"] {
+        color: #1e293b !important;
     }
     
-    /* Make sure all widget values are visible */
-    [data-baseweb="select"] div {
-        color: var(--text) !important;
+    p[class*="st-"] {
+        color: #1e293b !important;
     }
     
-    /* Fix the select slider text */
-    [data-testid="stStyledFullScreenFrame"] {
-        background-color: var(--background) !important;
+    /* Select slider specific fix */
+    div[data-testid="stSelectSlider"] > div > div {
+        color: #1e293b !important;
     }
     
-    /* Specific fix for select slider labels */
-    div[data-testid="stSelectSlider"] label {
-        color: var(--text) !important;
-        font-weight: 500 !important;
-    }
-    
-    /* Fix for any remaining invisible text */
+    /* Make sure all text in widgets is visible */
     .st-bh, .st-bj, .st-bk, .st-bl, .st-bm, .st-bn {
-        color: var(--text) !important;
+        color: #1e293b !important;
     }
     </style>
     """, unsafe_allow_html=True)
@@ -327,8 +250,8 @@ class ServiceSelector:
         """Render service selection UI and return selected services"""
         st.markdown("""
         <div class='custom-card'>
-            <h3>🎯 Select AWS Services</h3>
-            <p>Choose the services that best fit your architecture needs</p>
+            <h3 style='color: #1e293b !important; margin-bottom: 0.5rem;'>🎯 Select AWS Services</h3>
+            <p style='color: #64748b !important; margin: 0;'>Choose the services that best fit your architecture needs</p>
         </div>
         """, unsafe_allow_html=True)
         
@@ -354,8 +277,7 @@ class ServiceSelector:
         
         return selected_services
 
-# ... (keep all the existing pricing dictionaries and classes exactly as they were) ...
-
+# Pricing configurations (keeping the same as before)
 INSTANCE_FAMILIES = {
     "General Purpose": {
         "t3.micro": {"vCPU": 2, "Memory": 1, "Price": 0.0104},
@@ -1018,7 +940,7 @@ def main():
     st.markdown("""
     <div style='text-align: center; padding: 1rem 0;'>
         <h1>🚀 AWS Cloud Package Builder</h1>
-        <p style='color: var(--text-light); font-size: 1.1rem;'>Design, Configure, and Optimize Your Cloud Architecture</p>
+        <p style='color: #64748b !important; font-size: 1.1rem;'>Design, Configure, and Optimize Your Cloud Architecture</p>
     </div>
     """, unsafe_allow_html=True)
     
@@ -1028,8 +950,8 @@ def main():
     with st.expander("🎯 Project Requirements & Architecture", expanded=True):
         st.markdown("""
         <div class='custom-card'>
-            <h3>📋 Define Your Project Requirements</h3>
-            <p>Configure your workload profile, performance needs, and budget constraints</p>
+            <h3 style='color: #1e293b !important; margin-bottom: 0.5rem;'>📋 Define Your Project Requirements</h3>
+            <p style='color: #64748b !important; margin: 0;'>Configure your workload profile, performance needs, and budget constraints</p>
         </div>
         """, unsafe_allow_html=True)
         
@@ -1161,7 +1083,7 @@ def main():
         # Cost Summary
         st.markdown("""
         <div class='custom-card'>
-            <h3>💰 Cost Summary & Recommendations</h3>
+            <h3 style='color: #1e293b !important; margin-bottom: 1rem;'>💰 Cost Summary & Recommendations</h3>
         </div>
         """, unsafe_allow_html=True)
         
@@ -1201,8 +1123,8 @@ def main():
         # Export configuration
         st.markdown("""
         <div class='custom-card'>
-            <h3>📥 Export Configuration</h3>
-            <p>Download your complete architecture configuration for future reference</p>
+            <h3 style='color: #1e293b !important; margin-bottom: 0.5rem;'>📥 Export Configuration</h3>
+            <p style='color: #64748b !important; margin: 0;'>Download your complete architecture configuration for future reference</p>
         </div>
         """, unsafe_allow_html=True)
         
