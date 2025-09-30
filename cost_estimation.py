@@ -125,7 +125,158 @@ class InnovativePricing:
             final_price *= 0.85  # Additional 15% discount
             
         return final_price
+# Add after the InnovativePricing class
+INSTANCE_FAMILIES = {
+    "General Purpose": {
+        "t3.micro": {"vCPU": 2, "Memory": 1, "Price": 0.0104},
+        "t3.small": {"vCPU": 2, "Memory": 2, "Price": 0.0208},
+        "t3.medium": {"vCPU": 2, "Memory": 4, "Price": 0.0416},
+        "m5.large": {"vCPU": 2, "Memory": 8, "Price": 0.096},
+        "m5.xlarge": {"vCPU": 4, "Memory": 16, "Price": 0.192}
+    },
+    "Compute Optimized": {
+        "c5.large": {"vCPU": 2, "Memory": 4, "Price": 0.085},
+        "c5.xlarge": {"vCPU": 4, "Memory": 8, "Price": 0.17},
+        "c5.2xlarge": {"vCPU": 8, "Memory": 16, "Price": 0.34}
+    },
+    "Memory Optimized": {
+        "r5.large": {"vCPU": 2, "Memory": 16, "Price": 0.126},
+        "r5.xlarge": {"vCPU": 4, "Memory": 32, "Price": 0.252},
+        "r5.2xlarge": {"vCPU": 8, "Memory": 64, "Price": 0.504}
+    }
+}
 
+def render_service_configurator(service: str) -> Dict:
+    """Render configuration options for selected service"""
+    config = {}
+    
+    if service == "Amazon EC2":
+        st.markdown("##### Instance Configuration")
+        
+        # Instance family selection
+        family = st.selectbox(
+            "Instance Family",
+            list(INSTANCE_FAMILIES.keys()),
+            help="Choose instance family based on your workload"
+        )
+        
+        # Instance type selection with specs display
+        instance_types = list(INSTANCE_FAMILIES[family].keys())
+        selected_type = st.selectbox("Instance Type", instance_types)
+        specs = INSTANCE_FAMILIES[family][selected_type]
+        
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.metric("vCPU", specs["vCPU"])
+        with col2:
+            st.metric("Memory (GiB)", specs["Memory"])
+        with col3:
+            st.metric("Price/Hour", f"${specs['Price']}")
+        
+        config["instance_type"] = selected_type
+        config["instance_count"] = st.number_input("Number of Instances", 1, 100, 1)
+        config["storage_gb"] = st.number_input("EBS Storage per Instance (GB)", 8, 16384, 30)
+    
+    elif service == "Amazon RDS":
+        st.markdown("##### Database Configuration")
+        
+        config["engine"] = st.selectbox(
+            "Database Engine",
+            ["PostgreSQL", "MySQL", "MariaDB", "Oracle", "SQL Server"]
+        )
+        
+        config["instance_type"] = st.selectbox(
+            "Instance Type",
+            ["db.t3.micro", "db.t3.small", "db.t3.medium", "db.t3.large", 
+             "db.r5.large", "db.r5.xlarge"]
+        )
+        
+        config["storage_gb"] = st.number_input("Storage (GB)", 20, 65536, 100)
+        config["multi_az"] = st.checkbox("Multi-AZ Deployment")
+        config["backup_retention"] = st.slider("Backup Retention (Days)", 0, 35, 7)
+    
+    elif service == "Amazon S3":
+        st.markdown("##### Storage Configuration")
+        
+        config["storage_class"] = st.selectbox(
+            "Storage Class",
+            ["Standard", "Intelligent-Tiering", "Standard-IA", 
+             "One Zone-IA", "Glacier", "Glacier Deep Archive"]
+        )
+        
+        config["storage_gb"] = st.number_input("Storage (GB)", 1, 1000000, 100)
+        config["requests_per_month"] = st.number_input(
+            "Estimated Monthly Requests (thousands)",
+            1, 1000000, 100
+        ) * 1000
+    
+    elif service == "AWS Lambda":
+        st.markdown("##### Function Configuration")
+        
+        config["memory_mb"] = st.select_slider(
+            "Memory (MB)",
+            options=[128, 256, 512, 1024, 2048, 4096, 8192, 10240]
+        )
+        config["timeout_seconds"] = st.slider("Timeout (seconds)", 1, 900, 30)
+        config["requests_per_month"] = st.number_input(
+            "Monthly Invocations",
+            1000, 1000000000, 100000
+        )
+        config["avg_duration_ms"] = st.slider("Average Duration (ms)", 1, 1000, 100)
+    
+    elif service == "Amazon ECS" or service == "Amazon EKS":
+        st.markdown("##### Container Configuration")
+        
+        config["cluster_type"] = st.radio(
+            "Cluster Type",
+            ["Fargate", "EC2"] if service == "Amazon ECS" else ["Managed Node Groups"]
+        )
+        
+        if config["cluster_type"] in ["EC2", "Managed Node Groups"]:
+            config["node_instance_type"] = st.selectbox(
+                "Node Instance Type",
+                ["t3.medium", "t3.large", "m5.large", "m5.xlarge"]
+            )
+            config["node_count"] = st.number_input("Number of Nodes", 1, 100, 2)
+        else:
+            config["vcpu"] = st.number_input("vCPU Units", 0.25, 16.0, 1.0, 0.25)
+            config["memory_gb"] = st.number_input("Memory (GB)", 0.5, 120.0, 2.0, 0.5)
+        
+        config["desired_tasks"] = st.number_input("Desired Number of Tasks/Pods", 1, 1000, 2)
+    
+    elif service == "Amazon Bedrock":
+        st.markdown("##### Model Configuration")
+        
+        config["model"] = st.selectbox(
+            "Foundation Model",
+            ["Claude", "Llama 2", "Stable Diffusion", "Jurassic"]
+        )
+        config["requests_per_month"] = st.number_input(
+            "Monthly Requests",
+            1000, 10000000, 10000
+        )
+        config["avg_tokens"] = st.number_input("Average Tokens per Request", 100, 10000, 1000)
+    
+    elif service == "AWS WAF":
+        st.markdown("##### WAF Configuration")
+        
+        config["web_acls"] = st.number_input("Number of Web ACLs", 1, 100, 1)
+        config["rules"] = st.number_input("Number of Rules", 1, 1000, 5)
+        
+        rule_types = st.multiselect(
+            "Rule Types",
+            ["Rate Limiting", "IP Reputation", "SQL Injection", "XSS Protection",
+             "Geo Blocking", "Custom Rules"]
+        )
+        config["rule_types"] = rule_types
+    
+    # Add region selection for all services
+    config["region"] = st.selectbox(
+        "Region",
+        ["us-east-1", "us-west-2", "eu-west-1", "ap-southeast-1"]
+    )
+    
+    return config
 # Modify the main function
 def main():
     st.set_page_config(page_title="AWS Cloud Package Builder", layout="wide")
