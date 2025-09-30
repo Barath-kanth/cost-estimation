@@ -282,216 +282,137 @@ def render_service_configurator(service: str, key_prefix: str) -> Dict:
     config = {}
     
     if service == "Amazon EC2":
-        # ... existing EC2 configuration ...
-        pass
-    
-    elif service == "AWS Lambda":
-        st.markdown("##### Lambda Function Configuration")
+        st.markdown("##### Instance Configuration")
         
-        col1, col2 = st.columns(2)
+        family = st.selectbox(
+            "Instance Family",
+            list(INSTANCE_FAMILIES.keys()),
+            help="Choose instance family based on workload",
+            key=f"{key_prefix}_family"
+        )
+        
+        instance_types = list(INSTANCE_FAMILIES[family].keys())
+        selected_type = st.selectbox(
+            "Instance Type", 
+            instance_types,
+            key=f"{key_prefix}_type"
+        )
+        specs = INSTANCE_FAMILIES[family][selected_type]
+        
+        col1, col2, col3 = st.columns(3)
         with col1:
-            memory = st.select_slider(
-                "Memory (MB)",
-                options=[128, 256, 512, 1024, 2048, 4096, 8192, 10240],
-                value=128,
-                key=f"{key_prefix}_memory"
-            )
-            st.metric("Memory (MB)", memory)
+            st.metric("vCPU", specs["vCPU"])
         with col2:
-            timeout = st.slider(
-                "Timeout (seconds)", 
-                1, 900, 30,
-                key=f"{key_prefix}_timeout"
-            )
-            st.metric("Timeout", f"{timeout}s")
-        
-        requests = st.number_input(
-            "Monthly Invocations",
-            1000, 1000000000, 100000,
-            key=f"{key_prefix}_requests"
-        )
-        avg_duration = st.slider(
-            "Average Duration (ms)",
-            1, 1000, 100,
-            key=f"{key_prefix}_duration"
-        )
+            st.metric("Memory (GiB)", specs["Memory"])
+        with col3:
+            st.metric("Price/Hour", f"${specs['Price']}")
         
         config.update({
-            "memory_mb": memory,
-            "timeout_seconds": timeout,
-            "requests_per_month": requests,
-            "avg_duration_ms": avg_duration
+            "instance_type": selected_type,
+            "instance_count": st.number_input("Number of Instances", 1, 100, 1, key=f"{key_prefix}_count"),
+            "storage_gb": st.number_input("EBS Storage (GB)", 8, 16384, 30, key=f"{key_prefix}_storage")
         })
     
     elif service == "Amazon ECS":
-        # ... existing ECS configuration ...
-        pass
-    
-    elif service == "Amazon EKS":
-        st.markdown("##### Kubernetes Cluster Configuration")
+        st.markdown("##### Container Configuration")
         
-        node_type = st.selectbox(
-            "Node Instance Type",
-            ["t3.medium", "t3.large", "m5.large", "m5.xlarge"],
-            key=f"{key_prefix}_node_type"
+        launch_type = st.radio(
+            "Launch Type",
+            ["Fargate", "EC2"],
+            key=f"{key_prefix}_launch_type"
         )
         
         col1, col2 = st.columns(2)
         with col1:
-            nodes = st.number_input(
-                "Number of Nodes",
-                2, 100, 2,
-                key=f"{key_prefix}_nodes"
-            )
-            st.metric("Nodes", nodes)
+            vcpu = st.number_input("vCPU Units", 0.25, 4.0, 0.5, 0.25, key=f"{key_prefix}_vcpu")
+            st.metric("vCPU", vcpu)
         with col2:
-            pods = st.number_input(
-                "Pods per Node",
-                1, 100, 4,
-                key=f"{key_prefix}_pods"
-            )
-            st.metric("Total Pods", nodes * pods)
+            memory = st.number_input("Memory (GB)", 0.5, 30.0, 1.0, 0.5, key=f"{key_prefix}_memory")
+            st.metric("Memory (GB)", memory)
+        
+        tasks = st.number_input("Number of Tasks", 1, 100, 1, key=f"{key_prefix}_tasks")
         
         config.update({
-            "node_type": node_type,
-            "node_count": nodes,
-            "pods_per_node": pods
+            "launch_type": launch_type,
+            "vcpu": vcpu,
+            "memory_gb": memory,
+            "tasks": tasks
         })
     
-    elif service == "Amazon DynamoDB":
-        st.markdown("##### DynamoDB Configuration")
-        
-        col1, col2 = st.columns(2)
-        with col1:
-            storage = st.number_input(
-                "Storage (GB)",
-                1, 1000000, 100,
-                key=f"{key_prefix}_storage"
-            )
-            read_units = st.number_input(
-                "Read Capacity Units",
-                1, 100000, 5,
-                key=f"{key_prefix}_rcu"
-            )
-        with col2:
-            write_units = st.number_input(
-                "Write Capacity Units",
-                1, 100000, 5,
-                key=f"{key_prefix}_wcu"
-            )
-            backup = st.checkbox(
-                "Enable Point-in-time Recovery",
-                key=f"{key_prefix}_backup"
-            )
-        
-        config.update({
-            "storage_gb": storage,
-            "read_capacity_units": read_units,
-            "write_capacity_units": write_units,
-            "backup_enabled": backup
-        })
-    
-    elif service == "Amazon ElastiCache":
-        st.markdown("##### Cache Configuration")
+    elif service == "Amazon RDS":
+        st.markdown("##### Database Configuration")
         
         engine = st.selectbox(
-            "Cache Engine",
-            ["redis", "memcached"],
+            "Database Engine",
+            list(DATABASE_PRICING.keys()),
             key=f"{key_prefix}_engine"
         )
         
-        node_type = st.selectbox(
-            "Node Type",
-            ["cache.t3.micro", "cache.t3.small", "cache.t3.medium", "cache.r5.large"],
-            key=f"{key_prefix}_node_type"
+        instance_types = list(DATABASE_PRICING[engine].keys())
+        selected_type = st.selectbox(
+            "Instance Type", 
+            instance_types,
+            key=f"{key_prefix}_type"
         )
+        specs = DATABASE_PRICING[engine][selected_type]
         
-        nodes = st.number_input(
-            "Number of Nodes",
-            1, 20, 1,
-            key=f"{key_prefix}_nodes"
-        )
+        col1, col2 = st.columns(2)
+        with col1:
+            st.metric("vCPU", specs["vCPU"])
+            storage = st.number_input("Storage (GB)", 20, 65536, 100, key=f"{key_prefix}_storage")
+        with col2:
+            st.metric("Memory (GiB)", specs["Memory"])
+            multi_az = st.checkbox("Multi-AZ Deployment", key=f"{key_prefix}_multiaz")
         
         config.update({
             "engine": engine,
-            "node_type": node_type,
-            "node_count": nodes
+            "instance_type": selected_type,
+            "storage_gb": storage,
+            "multi_az": multi_az
         })
     
-    elif service == "Amazon SageMaker":
-        st.markdown("##### SageMaker Configuration")
+    elif service == "Amazon S3":
+        st.markdown("##### Storage Configuration")
         
-        instance_type = st.selectbox(
-            "Instance Type",
-            list(AI_ML_PRICING["SageMaker"].keys()),
-            key=f"{key_prefix}_instance"
+        storage_class = st.selectbox(
+            "Storage Class",
+            list(STORAGE_PRICING.keys()),
+            key=f"{key_prefix}_class"
         )
         
         col1, col2 = st.columns(2)
         with col1:
-            training_hours = st.number_input(
-                "Training Hours per Month",
-                1, 744, 100,
-                key=f"{key_prefix}_training"
-            )
-        with col2:
-            endpoints = st.number_input(
-                "Number of Endpoints",
-                1, 100, 1,
-                key=f"{key_prefix}_endpoints"
-            )
+            storage = st.number_input("Storage (GB)", 1, 1000000, 100, key=f"{key_prefix}_storage")
+            st.metric("Price/GB/Month", f"${STORAGE_PRICING[storage_class]}")
         
         config.update({
-            "instance_type": instance_type,
-            "training_hours": training_hours,
-            "endpoints": endpoints
+            "storage_class": storage_class,
+            "storage_gb": storage
         })
     
-    elif service == "Amazon CloudFront":
-        st.markdown("##### CDN Configuration")
+    elif service == "Amazon Bedrock":
+        st.markdown("##### Model Configuration")
+        
+        model = st.selectbox(
+            "Foundation Model",
+            list(AI_ML_PRICING["Bedrock"].keys()),
+            key=f"{key_prefix}_model"
+        )
         
         col1, col2 = st.columns(2)
         with col1:
-            data_transfer = st.number_input(
-                "Monthly Data Transfer (GB)",
-                1, 1000000, 1000,
-                key=f"{key_prefix}_transfer"
-            )
-            st.metric("Data Transfer Price/GB", f"${NETWORKING_PRICING['CloudFront']['price_per_gb']}")
+            requests = st.number_input("Monthly Requests", 1000, 10000000, 10000, key=f"{key_prefix}_requests")
         with col2:
-            requests = st.number_input(
-                "Monthly Requests (thousands)",
-                1, 1000000, 100,
-                key=f"{key_prefix}_requests"
-            )
-            st.metric("Price per 1000 Requests", f"${NETWORKING_PRICING['CloudFront']['requests_per_1000']}")
+            tokens = st.number_input("Avg Tokens/Request", 100, 10000, 1000, key=f"{key_prefix}_tokens")
+        
+        st.metric("Price/1K Tokens", f"${AI_ML_PRICING['Bedrock'][model]}")
         
         config.update({
-            "data_transfer_gb": data_transfer,
-            "requests": requests * 1000
+            "model": model,
+            "requests_per_month": requests,
+            "avg_tokens": tokens
         })
     
-    elif service == "AWS WAF":
-        # ... existing WAF configuration ...
-        pass
-    
-    elif service == "Amazon GuardDuty":
-        st.markdown("##### GuardDuty Configuration")
-        
-        analyzed_data = st.number_input(
-            "Monthly Data Analyzed (GB)",
-            1, 1000000, 1000,
-            key=f"{key_prefix}_data"
-        )
-        
-        st.metric("Base Price", f"${SECURITY_PRICING['GuardDuty']['base_price']}")
-        st.metric("Price per GB", f"${SECURITY_PRICING['GuardDuty']['price_per_gb']}")
-        
-        config.update({
-            "analyzed_gb": analyzed_data
-        })
-    
-    # Add region selection for all services
     config["region"] = st.selectbox(
         "Region",
         ["us-east-1", "us-west-2", "eu-west-1", "ap-southeast-1"],
@@ -500,6 +421,17 @@ def render_service_configurator(service: str, key_prefix: str) -> Dict:
     
     return config
     
+    # ... Add configurations for other services with unique keys ...
+    
+    # Add region selection with unique key
+    config["region"] = st.selectbox(
+        "Region",
+        ["us-east-1", "us-west-2", "eu-west-1", "ap-southeast-1"],
+        key=f"{key_prefix}_region"
+    )
+    
+    return config
+
 # Update the main function to pass unique keys
 def main():
     # ... existing code ...
