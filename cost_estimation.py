@@ -8,6 +8,157 @@ import pandas as pd
 from concurrent.futures import ThreadPoolExecutor
 import time
 
+# Custom CSS for improved styling
+def inject_custom_css():
+    st.markdown("""
+    <style>
+    /* Main theme colors */
+    :root {
+        --primary: #FF6B35;
+        --secondary: #004E89;
+        --accent: #00A8E8;
+        --background: #F7F9FC;
+        --card-bg: #FFFFFF;
+        --text: #2D3748;
+        --text-light: #718096;
+        --success: #48BB78;
+        --warning: #ED8936;
+        --error: #E53E3E;
+    }
+    
+    .main {
+        background-color: var(--background);
+    }
+    
+    .stApp {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    }
+    
+    /* Headers */
+    h1, h2, h3 {
+        color: var(--secondary) !important;
+        font-weight: 700 !important;
+    }
+    
+    h1 {
+        background: linear-gradient(45deg, #FF6B35, #FF8E53);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        text-align: center;
+        margin-bottom: 2rem !important;
+    }
+    
+    /* Cards and containers */
+    .stExpander {
+        background-color: var(--card-bg) !important;
+        border-radius: 12px !important;
+        border: 1px solid #E2E8F0 !important;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06) !important;
+    }
+    
+    .stButton>button {
+        background: linear-gradient(45deg, #FF6B35, #FF8E53) !important;
+        color: white !important;
+        border: none !important;
+        border-radius: 8px !important;
+        padding: 0.5rem 1rem !important;
+        font-weight: 600 !important;
+        transition: all 0.3s ease !important;
+    }
+    
+    .stButton>button:hover {
+        transform: translateY(-2px) !important;
+        box-shadow: 0 6px 12px rgba(255, 107, 53, 0.3) !important;
+    }
+    
+    /* Metrics */
+    [data-testid="stMetricValue"] {
+        color: var(--primary) !important;
+        font-weight: 700 !important;
+        font-size: 1.5rem !important;
+    }
+    
+    [data-testid="stMetricLabel"] {
+        color: var(--text-light) !important;
+        font-weight: 600 !important;
+    }
+    
+    /* Tabs */
+    .stTabs [data-baseweb="tab-list"] {
+        gap: 8px;
+    }
+    
+    .stTabs [data-baseweb="tab"] {
+        background-color: #E2E8F0 !important;
+        border-radius: 8px 8px 0 0 !important;
+        padding: 10px 16px !important;
+        font-weight: 600 !important;
+    }
+    
+    .stTabs [aria-selected="true"] {
+        background-color: var(--primary) !important;
+        color: white !important;
+    }
+    
+    /* Checkboxes */
+    .stCheckbox [data-baseweb="checkbox"] {
+        background-color: var(--card-bg) !important;
+    }
+    
+    .stCheckbox [data-baseweb="checkbox"]:checked {
+        background-color: var(--primary) !important;
+        border-color: var(--primary) !important;
+    }
+    
+    /* Select boxes */
+    .stSelectbox [data-baseweb="select"] {
+        border-radius: 8px !important;
+    }
+    
+    /* Number input */
+    .stNumberInput [data-baseweb="input"] {
+        border-radius: 8px !important;
+    }
+    
+    /* Success/Warning/Error messages */
+    .stAlert {
+        border-radius: 8px !important;
+    }
+    
+    /* Download button */
+    .stDownloadButton>button {
+        background: linear-gradient(45deg, #004E89, #00A8E8) !important;
+        color: white !important;
+        border: none !important;
+        border-radius: 8px !important;
+        padding: 0.75rem 1.5rem !important;
+        font-size: 1.1rem !important;
+        font-weight: 600 !important;
+    }
+    
+    /* Custom card styling */
+    .custom-card {
+        background: var(--card-bg);
+        border-radius: 12px;
+        padding: 1.5rem;
+        border: 1px solid #E2E8F0;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        margin-bottom: 1rem;
+    }
+    
+    /* Service icons */
+    .service-icon {
+        font-size: 1.5rem;
+        margin-right: 0.5rem;
+    }
+    
+    /* Progress bar */
+    .stProgress > div > div > div {
+        background: linear-gradient(45deg, #FF6B35, #FF8E53) !important;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
 def initialize_session_state():
     """Initialize session state variables"""
     if 'configurations' not in st.session_state:
@@ -18,33 +169,33 @@ def initialize_session_state():
         st.session_state.total_cost = 0.0
 
 AWS_SERVICES = {
-    "Compute": {
+    "🚀 Compute": {
         "Amazon EC2": "Virtual servers in the cloud",
         "AWS Lambda": "Serverless compute service",
         "Amazon ECS": "Fully managed container orchestration",
         "Amazon EKS": "Managed Kubernetes service"
     },
-    "Storage": {
+    "💾 Storage": {
         "Amazon S3": "Object storage service",
         "Amazon EBS": "Block storage for EC2",
         "Amazon EFS": "Managed file system"
     },
-    "Database": {
+    "🗄️ Database": {
         "Amazon RDS": "Managed relational database",
         "Amazon DynamoDB": "Managed NoSQL database",
         "Amazon ElastiCache": "In-memory caching"
     },
-    "AI/ML": {
+    "🤖 AI/ML": {
         "Amazon Bedrock": "Fully managed foundation models",
         "Amazon SageMaker": "Build, train and deploy ML models",
         "Amazon Comprehend": "Natural language processing"
     },
-    "Networking": {
+    "🌐 Networking": {
         "Amazon VPC": "Isolated cloud resources",
         "Amazon CloudFront": "Global content delivery network",
         "Elastic Load Balancing": "Distribute incoming traffic"
     },
-    "Security": {
+    "🔒 Security": {
         "AWS WAF": "Web Application Firewall",
         "Amazon GuardDuty": "Threat detection service",
         "AWS Shield": "DDoS protection"
@@ -55,21 +206,26 @@ class ServiceSelector:
     @staticmethod
     def render_service_selection() -> Dict[str, List[str]]:
         """Render service selection UI and return selected services"""
-        st.subheader("🎯 Select AWS Services")
+        st.markdown("""
+        <div class='custom-card'>
+            <h3>🎯 Select AWS Services</h3>
+            <p>Choose the services that best fit your architecture needs</p>
+        </div>
+        """, unsafe_allow_html=True)
         
         selected_services = {}
         
         tabs = st.tabs(list(AWS_SERVICES.keys()))
         for i, (category, services) in enumerate(AWS_SERVICES.items()):
             with tabs[i]:
-                st.markdown(f"### {category} Services")
+                st.markdown(f"### {category.split(' ')[1]} Services")
                 
                 cols = st.columns(2)
                 for j, (service, description) in enumerate(services.items()):
                     col_idx = j % 2
                     with cols[col_idx]:
                         if st.checkbox(
-                            f"{service}", 
+                            f"**{service}**", 
                             help=description,
                             key=f"service_{category}_{j}"
                         ):
@@ -396,7 +552,7 @@ def render_service_configurator(service: str, key_prefix: str) -> Dict:
     config = {}
     
     if service == "Amazon EC2":
-        st.markdown("##### Instance Configuration")
+        st.markdown("##### 🖥️ Instance Configuration")
         family = st.selectbox(
             "Instance Family",
             list(INSTANCE_FAMILIES.keys()),
@@ -446,7 +602,7 @@ def render_service_configurator(service: str, key_prefix: str) -> Dict:
         })
         
     elif service == "Amazon RDS":
-        st.markdown("##### Database Configuration")
+        st.markdown("##### 🗄️ Database Configuration")
         engine = st.selectbox(
             "Database Engine",
             list(DATABASE_PRICING.keys()),
@@ -486,7 +642,7 @@ def render_service_configurator(service: str, key_prefix: str) -> Dict:
         })
         
     elif service == "Amazon EBS":
-        st.markdown("##### EBS Volume Configuration")
+        st.markdown("##### 💾 EBS Volume Configuration")
         
         col1, col2 = st.columns(2)
         with col1:
@@ -527,7 +683,7 @@ def render_service_configurator(service: str, key_prefix: str) -> Dict:
         })
         
     elif service == "AWS Lambda":
-        st.markdown("##### Lambda Function Configuration")
+        st.markdown("##### ⚡ Lambda Function Configuration")
         
         col1, col2, col3 = st.columns(3)
         with col1:
@@ -572,7 +728,7 @@ def render_service_configurator(service: str, key_prefix: str) -> Dict:
         })
         
     elif service == "Amazon EKS":
-        st.markdown("##### EKS Cluster Configuration")
+        st.markdown("##### 🐳 EKS Cluster Configuration")
         
         col1, col2 = st.columns(2)
         with col1:
@@ -623,7 +779,7 @@ def render_service_configurator(service: str, key_prefix: str) -> Dict:
         st.metric("Estimated Monthly Cost", f"${total_estimated:,.2f}")
         
     elif service == "Amazon ECS":
-        st.markdown("##### Container Configuration")
+        st.markdown("##### 🐳 Container Configuration")
         launch_type = st.radio(
             "Launch Type",
             ["Fargate", "EC2"],
@@ -690,7 +846,7 @@ def render_service_configurator(service: str, key_prefix: str) -> Dict:
             })
             
     elif service == "Amazon S3":
-        st.markdown("##### Storage Configuration")
+        st.markdown("##### ☁️ Storage Configuration")
         storage_class = st.selectbox(
             "Storage Class",
             list(STORAGE_PRICING.keys()),
@@ -711,7 +867,7 @@ def render_service_configurator(service: str, key_prefix: str) -> Dict:
         })
         
     elif service == "Amazon Bedrock":
-        st.markdown("##### Model Configuration")
+        st.markdown("##### 🤖 Model Configuration")
         model = st.selectbox(
             "Foundation Model",
             list(AI_ML_PRICING["Bedrock"].keys()),
@@ -731,7 +887,7 @@ def render_service_configurator(service: str, key_prefix: str) -> Dict:
     
     # Enhanced commitment options
     commitment = st.selectbox(
-        "Commitment Level",
+        "💎 Commitment Level",
         ["none", "1-year", "3-year"],
         help="Savings Plans/Reserved Instances commitment",
         key=f"{key_prefix}_commitment"
@@ -739,7 +895,7 @@ def render_service_configurator(service: str, key_prefix: str) -> Dict:
     config["commitment"] = commitment
     
     config["region"] = st.selectbox(
-        "Region",
+        "🌍 Region",
         ["us-east-1", "us-west-2", "eu-west-1", "ap-northeast-1", "ap-southeast-1"],
         key=f"{key_prefix}_region"
     )
@@ -748,12 +904,29 @@ def render_service_configurator(service: str, key_prefix: str) -> Dict:
 
 def main():
     st.set_page_config(page_title="AWS Cloud Package Builder", layout="wide")
-    st.title("🚀 AWS Cloud Package Builder")
+    
+    # Inject custom CSS
+    inject_custom_css()
+    
+    # Main title with gradient
+    st.markdown("""
+    <div style='text-align: center; padding: 2rem 0;'>
+        <h1 style='font-size: 3rem; margin-bottom: 0.5rem;'>🚀 AWS Cloud Package Builder</h1>
+        <p style='font-size: 1.2rem; color: #718096;'>Design, Configure, and Optimize Your Cloud Architecture</p>
+    </div>
+    """, unsafe_allow_html=True)
     
     initialize_session_state()
     
     # INNOVATIVE PROJECT REQUIREMENTS SECTION
     with st.expander("🎯 Project Requirements & Architecture", expanded=True):
+        st.markdown("""
+        <div class='custom-card'>
+            <h3>📋 Define Your Project Requirements</h3>
+            <p>Configure your workload profile, performance needs, and budget constraints</p>
+        </div>
+        """, unsafe_allow_html=True)
+        
         col1, col2, col3 = st.columns(3)
         
         with col1:
@@ -851,7 +1024,7 @@ def main():
         st.session_state.configurations = {}
         
         for category, services in st.session_state.selected_services.items():
-            st.subheader(f"{category} Services")
+            st.subheader(f"{category}")
             
             for i, service in enumerate(services):
                 with st.expander(f"⚙️ {service}", expanded=True):
@@ -879,35 +1052,56 @@ def main():
                         "cost": cost
                     }
         
-        st.header("💰 Cost Summary & Recommendations")
+        # Cost Summary with improved styling
+        st.markdown("""
+        <div class='custom-card'>
+            <h3>💰 Cost Summary & Recommendations</h3>
+        </div>
+        """, unsafe_allow_html=True)
+        
         col1, col2, col3, col4 = st.columns(4)
         with col1:
             st.metric("Total Monthly Cost", f"${st.session_state.total_cost:,.2f}")
         with col2:
             st.metric("Services Selected", len(st.session_state.configurations))
         with col3:
-            budget_used = (st.session_state.total_cost / monthly_budget) * 100
+            budget_used = (st.session_state.total_cost / monthly_budget) * 100 if monthly_budget > 0 else 0
             st.metric("Budget Utilized", f"{budget_used:.1f}%")
         with col4:
             savings_potential = st.session_state.total_cost * 0.15  # Estimate 15% savings potential
             st.metric("Savings Potential", f"${savings_potential:,.2f}")
         
+        # Progress bar for budget utilization
+        if monthly_budget > 0:
+            budget_percentage = min(st.session_state.total_cost / monthly_budget, 1.0)
+            st.progress(budget_percentage)
+        
         # Cost optimization recommendations
-        with st.expander("💡 Cost Optimization Recommendations"):
+        with st.expander("💡 Cost Optimization Recommendations", expanded=True):
             if st.session_state.total_cost > monthly_budget:
-                st.warning("⚠️ Your estimated costs exceed your budget. Consider:")
-                st.write("• Right-size instances based on actual usage patterns")
-                st.write("• Implement auto-scaling for variable workloads")
-                st.write("• Use Savings Plans for committed usage")
-                st.write("• Consider spot instances for fault-tolerant workloads")
+                st.error("⚠️ Your estimated costs exceed your budget. Consider:")
+                st.write("• 🔧 Right-size instances based on actual usage patterns")
+                st.write("• 📈 Implement auto-scaling for variable workloads")
+                st.write("• 💰 Use Savings Plans for committed usage")
+                st.write("• 🎯 Consider spot instances for fault-tolerant workloads")
+                st.write("• 💾 Optimize storage classes and lifecycle policies")
             else:
                 st.success("✅ Your architecture is within budget! Suggestions:")
-                st.write("• Implement monitoring for cost optimization")
-                st.write("• Consider Reserved Instances for stable workloads")
-                st.write("• Review storage lifecycle policies")
+                st.write("• 📊 Implement monitoring for cost optimization")
+                st.write("• 💎 Consider Reserved Instances for stable workloads")
+                st.write("• 🔄 Review storage lifecycle policies")
+                st.write("• ⚡ Enable cost anomaly detection")
+        
+        # Export configuration
+        st.markdown("""
+        <div class='custom-card'>
+            <h3>📥 Export Configuration</h3>
+            <p>Download your complete architecture configuration for future reference</p>
+        </div>
+        """, unsafe_allow_html=True)
         
         st.download_button(
-            "📥 Export Configuration",
+            "📥 Export Configuration as JSON",
             data=json.dumps({
                 "requirements": {
                     "workload_complexity": workload_complexity,
@@ -924,7 +1118,9 @@ def main():
                     "data_volume_gb": data_volume_gb,
                     "expected_users": expected_users
                 },
-                "services": st.session_state.configurations
+                "services": st.session_state.configurations,
+                "total_estimated_cost": st.session_state.total_cost,
+                "generated_at": datetime.now().isoformat()
             }, indent=2),
             file_name="aws_architecture_plan.json",
             mime="application/json",
