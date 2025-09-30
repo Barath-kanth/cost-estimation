@@ -143,50 +143,13 @@ class InnovativePricing:
             base_price = (storage_gb * STORAGE_PRICING[storage_class]) + (requests / 1000 * 0.0004)
             
         elif service == "AWS Lambda":
-            st.markdown("##### Lambda Function Configuration")
-        
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            memory_mb = st.selectbox(
-                "Memory (MB)",
-                [128, 256, 512, 1024, 2048, 3008, 4096, 5120, 6144, 7168, 8192, 9216, 10240],
-                index=0,
-                key=f"{key_prefix}_memory"
-            )
-            st.metric("Memory", f"{memory_mb} MB")
-        
-        with col2:
-            requests = st.number_input(
-                "Monthly Requests",
-                min_value=1000,
-                max_value=100000000,
-                value=1000000,
-                step=100000,
-                key=f"{key_prefix}_requests"
-            )
-            st.metric("Requests/Month", f"{requests:,}")
-        
-        with col3:
-            duration_ms = st.number_input(
-                "Average Duration (ms)",
-                min_value=100,
-                max_value=90000,
-                value=1000,
-                step=100,
-                key=f"{key_prefix}_duration"
-            )
-            st.metric("Duration", f"{duration_ms} ms")
-        
-        # Calculate and display estimated cost
-        gb_seconds = (requests * duration_ms * memory_mb) / (1000 * 1024)
-        estimated_cost = (requests * 0.0000002) + (gb_seconds * 0.0000166667)
-        st.metric("Estimated Monthly Cost", f"${estimated_cost:,.2f}")
-        
-        config.update({
-            "memory_mb": memory_mb,
-            "requests_per_month": requests,
-            "avg_duration_ms": duration_ms
-        })
+            memory_mb = config.get('memory_mb', 128)
+            requests = config.get('requests_per_month', 1000000)
+            duration_ms = config.get('avg_duration_ms', 100)
+            
+            gb_seconds = (requests * duration_ms * memory_mb) / (1000 * 1024)
+            base_price = (requests * 0.0000002) + (gb_seconds * 0.0000166667)
+
 
 
         
@@ -408,6 +371,53 @@ def render_service_configurator(service: str, key_prefix: str) -> Dict:
             "instance_count": st.number_input("Number of Instances", 1, 100, 1, key=f"{key_prefix}_count"),
             "storage_gb": st.number_input("EBS Storage (GB)", 8, 16384, 30, key=f"{key_prefix}_storage")
         })
+
+    elif service == "AWS Lambda":
+    st.markdown("##### Lambda Function Configuration")
+    
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        memory_mb = st.selectbox(
+            "Memory (MB)",
+            [128, 256, 512, 1024, 2048, 3008, 4096, 5120, 6144, 7168, 8192, 9216, 10240],
+            index=0,
+            key=f"{key_prefix}_memory"
+        )
+        st.metric("Memory", f"{memory_mb} MB")
+    
+    with col2:
+        requests = st.number_input(
+            "Monthly Requests",
+            min_value=1000,
+            max_value=100000000,
+            value=1000000,
+            step=100000,
+            key=f"{key_prefix}_requests"
+        )
+        st.metric("Requests/Month", f"{requests:,}")
+    
+    with col3:
+        duration_ms = st.number_input(
+            "Average Duration (ms)",
+            min_value=100,
+            max_value=90000,
+            value=1000,
+            step=100,
+            key=f"{key_prefix}_duration"
+        )
+        st.metric("Duration", f"{duration_ms} ms")
+    
+    # Calculate and display estimated cost
+    gb_seconds = (requests * duration_ms * memory_mb) / (1000 * 1024)
+    estimated_cost = (requests * 0.0000002) + (gb_seconds * 0.0000166667)
+    st.metric("Estimated Monthly Cost", f"${estimated_cost:,.2f}")
+    
+    config.update({
+        "memory_mb": memory_mb,
+        "requests_per_month": requests,
+        "avg_duration_ms": duration_ms
+    })
+
         
     elif service == "Amazon EKS":
         st.markdown("##### EKS Cluster Configuration")
