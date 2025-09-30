@@ -44,7 +44,36 @@ AWS_SERVICES = {
 }
 
 # Add this new class for service selection
-
+# Add after AWS_SERVICES dictionary
+class ServiceSelector:
+    @staticmethod
+    def render_service_selection() -> Dict[str, List[str]]:
+        """Render service selection UI and return selected services"""
+        st.subheader("🎯 Select AWS Services")
+        
+        selected_services = {}
+        
+        # Use tabs for service categories
+        tabs = st.tabs(list(AWS_SERVICES.keys()))
+        for i, (category, services) in enumerate(AWS_SERVICES.items()):
+            with tabs[i]:
+                st.markdown(f"### {category} Services")
+                
+                # Create columns for better layout
+                cols = st.columns(2)
+                for j, (service, description) in enumerate(services.items()):
+                    col_idx = j % 2
+                    with cols[col_idx]:
+                        if st.checkbox(
+                            f"{service}", 
+                            help=description,
+                            key=f"service_{category}_{j}"
+                        ):
+                            if category not in selected_services:
+                                selected_services[category] = []
+                            selected_services[category].append(service)
+        
+        return selected_services
 
 # Add this new class for innovative pricing
 class InnovativePricing:
