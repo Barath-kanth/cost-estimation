@@ -17,7 +17,6 @@ def initialize_session_state():
     if 'total_cost' not in st.session_state:
         st.session_state.total_cost = 0.0
 
-# Add this after imports
 AWS_SERVICES = {
     "Compute": {
         "Amazon EC2": "Virtual servers in the cloud",
@@ -52,7 +51,6 @@ AWS_SERVICES = {
     }
 }
 
-# Add this new class for service selection
 class ServiceSelector:
     @staticmethod
     def render_service_selection() -> Dict[str, List[str]]:
@@ -61,13 +59,11 @@ class ServiceSelector:
         
         selected_services = {}
         
-        # Use tabs for service categories
         tabs = st.tabs(list(AWS_SERVICES.keys()))
         for i, (category, services) in enumerate(AWS_SERVICES.items()):
             with tabs[i]:
                 st.markdown(f"### {category} Services")
                 
-                # Create columns for better layout
                 cols = st.columns(2)
                 for j, (service, description) in enumerate(services.items()):
                     col_idx = j % 2
@@ -83,174 +79,6 @@ class ServiceSelector:
         
         return selected_services
 
-# Add this new class for innovative pricing
-class InnovativePricing:
-    @staticmethod
-    def calculate_price(service: str, config: Dict, usage_pattern: str = "normal") -> float:
-        """Calculate price using innovative factors"""
-        base_price = 0.0
-        
-        # Usage pattern multipliers
-        pattern_multipliers = {
-            "sporadic": 0.7,    # Less consistent usage
-            "normal": 1.0,      # Regular usage
-            "intensive": 1.3    # Heavy usage
-        }
-        
-        # Time-based discounts
-        current_hour = datetime.now().hour
-        time_multiplier = 0.8 if 0 <= current_hour < 6 else 1.0
-        
-        # Region-based adjustments
-        region_multipliers = {
-            "us-east-1": 1.0,
-            "us-west-2": 1.05,
-            "eu-west-1": 1.1,
-            "ap-southeast-1": 1.15
-        }
-        
-        # Calculate base price based on service and configuration
-        if service == "Amazon EC2":
-            instance_type = config.get('instance_type', 't3.micro')
-            # Get price from INSTANCE_FAMILIES
-            for family in INSTANCE_FAMILIES.values():
-                if instance_type in family:
-                    base_price = family[instance_type]['Price'] * 730  # Hours per month
-                    break
-            
-            # Add storage cost
-            storage_gb = config.get('storage_gb', 30)
-            storage_cost = storage_gb * 0.10  # $0.10 per GB/month for EBS
-            base_price = (base_price * config.get('instance_count', 1)) + storage_cost
-            
-        elif service == "Amazon RDS":
-            instance_type = config.get('instance_type')
-            engine = config.get('engine')
-            if engine in DATABASE_PRICING and instance_type in DATABASE_PRICING[engine]:
-                base_price = DATABASE_PRICING[engine][instance_type]['Price'] * 730
-                
-            storage_gb = config.get('storage_gb', 20)
-            base_price += storage_gb * 0.115  # RDS storage cost
-            
-            if config.get('multi_az', False):
-                base_price *= 2  # Double cost for Multi-AZ
-            
-        elif service == "Amazon S3":
-            storage_class = config.get('storage_class', 'Standard')
-            storage_gb = config.get('storage_gb', 100)
-            requests = config.get('requests_per_month', 100000)
-            
-            base_price = (storage_gb * STORAGE_PRICING[storage_class]) + (requests / 1000 * 0.0004)
-            
-        elif service == "AWS Lambda":
-            memory_mb = config.get('memory_mb', 128)
-            requests = config.get('requests_per_month', 1000000)
-            duration_ms = config.get('avg_duration_ms', 100)
-            
-            gb_seconds = (requests * duration_ms * memory_mb) / (1000 * 1024)
-            base_price = (requests * 0.0000002) + (gb_seconds * 0.0000166667)
-
-
-
-        
-    # Apply region multiplier for Lambda
-        region = config.get('region', 'us-east-1')
-        base_price *= region_multipliers.get(region, 1.0)
-
-            
-        if service == "Amazon Bedrock":
-            model = config.get('model', 'Claude')
-            requests = config.get('requests_per_month', 10000)
-            tokens = config.get('avg_tokens', 1000)
-            
-            base_price = (requests * tokens / 1000) * AI_ML_PRICING['Bedrock'][model]
-            
-        elif service == "Amazon CloudFront":
-            data_gb = config.get('data_transfer_gb', 1000)
-            requests = config.get('requests', 100000)
-            
-            base_price = (data_gb * NETWORKING_PRICING['CloudFront']['price_per_gb'] +
-                         (requests / 1000) * NETWORKING_PRICING['CloudFront']['requests_per_1000'])
-            
-        elif service == "AWS WAF":
-            acls = config.get('web_acls', 1)
-            rules = config.get('rules', 5)
-            
-            base_price = (acls * SECURITY_PRICING['WAF']['price_per_acl'] +
-                         rules * SECURITY_PRICING['WAF']['price_per_rule'])
-            
-        elif service == "Amazon EKS":
-            # EKS pricing: $0.10 per hour per cluster
-            cluster_hours = config.get('cluster_hours', 730)  # Default: 24*30.5 = 730 hours/month
-            base_price = cluster_hours * EKS_PRICING['cluster_per_hour']
-            
-            # Add node group costs (EC2 instances)
-            node_count = config.get('node_count', 2)
-            node_instance_type = config.get('node_instance_type', 't3.medium')
-            
-            # Find the instance price
-            node_price_per_hour = 0.0
-            for family in INSTANCE_FAMILIES.values():
-                if node_instance_type in family:
-                    node_price_per_hour = family[node_instance_type]['Price']
-                    break
-            
-            # Calculate total node cost
-            node_cost = node_count * node_price_per_hour * cluster_hours
-            base_price += node_cost
-            
-            # Add load balancer cost if applicable
-            if config.get('load_balancer', False):
-                base_price += NETWORKING_PRICING['ELB']['Application'] * cluster_hours
-            
-        elif service == "Amazon ECS":
-            # ECS pricing depends on launch type
-            launch_type = config.get('launch_type', 'Fargate')
-            tasks = config.get('tasks', 1)
-            hours_per_month = 730  # Default: 24*30.5 = 730 hours/month
-            
-            if launch_type == "Fargate":
-                vcpu = config.get('vcpu', 0.5)
-                memory_gb = config.get('memory_gb', 1.0)
-                
-                # Fargate pricing: $0.04048 per vCPU/hour + $0.004445 per GB/hour
-                price_per_hour = (vcpu * 0.04048) + (memory_gb * 0.004445)
-                base_price = price_per_hour * hours_per_month * tasks
-                
-            elif launch_type == "EC2":
-                # EC2 launch type - use EC2 instance pricing
-                instance_type = config.get('instance_type', 't3.medium')
-                instance_count = config.get('instance_count', 1)
-                
-                for family in INSTANCE_FAMILIES.values():
-                    if instance_type in family:
-                        instance_price = family[instance_type]['Price']
-                        base_price = instance_price * hours_per_month * instance_count
-                        break
-        
-        # Apply multipliers
-        final_price = (
-            base_price *
-            pattern_multipliers.get(usage_pattern, 1.0) *
-            time_multiplier *
-            region_multipliers.get(config.get('region', 'us-east-1'), 1.0)
-        )
-        
-        # Apply volume discounts
-        if final_price > 1000:
-            final_price *= 0.9  # 10% discount for high volume
-        if final_price > 5000:
-            final_price *= 0.85  # Additional 15% discount
-            
-        return final_price
-
-# Add EKS pricing configuration
-EKS_PRICING = {
-    "cluster_per_hour": 0.10,  # $0.10 per hour per EKS cluster
-    "node_group_per_hour": 0.0,  # Node groups use EC2 pricing
-}
-
-# Add after the InnovativePricing class
 INSTANCE_FAMILIES = {
     "General Purpose": {
         "t3.micro": {"vCPU": 2, "Memory": 1, "Price": 0.0104},
@@ -271,7 +99,6 @@ INSTANCE_FAMILIES = {
     }
 }
 
-# Add these pricing configurations after INSTANCE_FAMILIES
 DATABASE_PRICING = {
     "PostgreSQL": {
         "db.t3.micro": {"vCPU": 1, "Memory": 1, "Price": 0.017},
@@ -340,6 +167,147 @@ SECURITY_PRICING = {
     }
 }
 
+EKS_PRICING = {
+    "cluster_per_hour": 0.10,
+    "node_group_per_hour": 0.0,
+}
+
+class InnovativePricing:
+    @staticmethod
+    def calculate_price(service: str, config: Dict, usage_pattern: str = "normal") -> float:
+        """Calculate price using innovative factors"""
+        base_price = 0.0
+        
+        pattern_multipliers = {
+            "sporadic": 0.7,
+            "normal": 1.0,
+            "intensive": 1.3
+        }
+        
+        current_hour = datetime.now().hour
+        time_multiplier = 0.8 if 0 <= current_hour < 6 else 1.0
+        
+        region_multipliers = {
+            "us-east-1": 1.0,
+            "us-west-2": 1.05,
+            "eu-west-1": 1.1,
+            "ap-southeast-1": 1.15
+        }
+        
+        if service == "Amazon EC2":
+            instance_type = config.get('instance_type', 't3.micro')
+            for family in INSTANCE_FAMILIES.values():
+                if instance_type in family:
+                    base_price = family[instance_type]['Price'] * 730
+                    break
+            
+            storage_gb = config.get('storage_gb', 30)
+            storage_cost = storage_gb * 0.10
+            base_price = (base_price * config.get('instance_count', 1)) + storage_cost
+            
+        elif service == "Amazon RDS":
+            instance_type = config.get('instance_type')
+            engine = config.get('engine')
+            if engine in DATABASE_PRICING and instance_type in DATABASE_PRICING[engine]:
+                base_price = DATABASE_PRICING[engine][instance_type]['Price'] * 730
+                
+            storage_gb = config.get('storage_gb', 20)
+            base_price += storage_gb * 0.115
+            
+            if config.get('multi_az', False):
+                base_price *= 2
+            
+        elif service == "Amazon S3":
+            storage_class = config.get('storage_class', 'Standard')
+            storage_gb = config.get('storage_gb', 100)
+            requests = config.get('requests_per_month', 100000)
+            
+            base_price = (storage_gb * STORAGE_PRICING[storage_class]) + (requests / 1000 * 0.0004)
+            
+        elif service == "AWS Lambda":
+            memory_mb = config.get('memory_mb', 128)
+            requests = config.get('requests_per_month', 1000000)
+            duration_ms = config.get('avg_duration_ms', 100)
+            
+            gb_seconds = (requests * duration_ms * memory_mb) / (1000 * 1024)
+            base_price = (requests * 0.0000002) + (gb_seconds * 0.0000166667)
+            
+        elif service == "Amazon Bedrock":
+            model = config.get('model', 'Claude')
+            requests = config.get('requests_per_month', 10000)
+            tokens = config.get('avg_tokens', 1000)
+            
+            base_price = (requests * tokens / 1000) * AI_ML_PRICING['Bedrock'][model]
+            
+        elif service == "Amazon CloudFront":
+            data_gb = config.get('data_transfer_gb', 1000)
+            requests = config.get('requests', 100000)
+            
+            base_price = (data_gb * NETWORKING_PRICING['CloudFront']['price_per_gb'] +
+                         (requests / 1000) * NETWORKING_PRICING['CloudFront']['requests_per_1000'])
+            
+        elif service == "AWS WAF":
+            acls = config.get('web_acls', 1)
+            rules = config.get('rules', 5)
+            
+            base_price = (acls * SECURITY_PRICING['WAF']['price_per_acl'] +
+                         rules * SECURITY_PRICING['WAF']['price_per_rule'])
+            
+        elif service == "Amazon EKS":
+            cluster_hours = config.get('cluster_hours', 730)
+            base_price = cluster_hours * EKS_PRICING['cluster_per_hour']
+            
+            node_count = config.get('node_count', 2)
+            node_instance_type = config.get('node_instance_type', 't3.medium')
+            
+            node_price_per_hour = 0.0
+            for family in INSTANCE_FAMILIES.values():
+                if node_instance_type in family:
+                    node_price_per_hour = family[node_instance_type]['Price']
+                    break
+            
+            node_cost = node_count * node_price_per_hour * cluster_hours
+            base_price += node_cost
+            
+            if config.get('load_balancer', False):
+                base_price += NETWORKING_PRICING['ELB']['Application'] * cluster_hours
+            
+        elif service == "Amazon ECS":
+            launch_type = config.get('launch_type', 'Fargate')
+            tasks = config.get('tasks', 1)
+            hours_per_month = 730
+            
+            if launch_type == "Fargate":
+                vcpu = config.get('vcpu', 0.5)
+                memory_gb = config.get('memory_gb', 1.0)
+                
+                price_per_hour = (vcpu * 0.04048) + (memory_gb * 0.004445)
+                base_price = price_per_hour * hours_per_month * tasks
+                
+            elif launch_type == "EC2":
+                instance_type = config.get('instance_type', 't3.medium')
+                instance_count = config.get('instance_count', 1)
+                
+                for family in INSTANCE_FAMILIES.values():
+                    if instance_type in family:
+                        instance_price = family[instance_type]['Price']
+                        base_price = instance_price * hours_per_month * instance_count
+                        break
+        
+        final_price = (
+            base_price *
+            pattern_multipliers.get(usage_pattern, 1.0) *
+            time_multiplier *
+            region_multipliers.get(config.get('region', 'us-east-1'), 1.0)
+        )
+        
+        if final_price > 1000:
+            final_price *= 0.9
+        if final_price > 5000:
+            final_price *= 0.85
+            
+        return final_price
+
 def render_service_configurator(service: str, key_prefix: str) -> Dict:
     """Render configuration options for selected service"""
     config = {}
@@ -371,7 +339,7 @@ def render_service_configurator(service: str, key_prefix: str) -> Dict:
             "instance_count": st.number_input("Number of Instances", 1, 100, 1, key=f"{key_prefix}_count"),
             "storage_gb": st.number_input("EBS Storage (GB)", 8, 16384, 30, key=f"{key_prefix}_storage")
         })
-
+        
     elif service == "AWS Lambda":
         st.markdown("##### Lambda Function Configuration")
         
@@ -406,75 +374,67 @@ def render_service_configurator(service: str, key_prefix: str) -> Dict:
                 key=f"{key_prefix}_duration"
             )
             st.metric("Duration", f"{duration_ms} ms")
-    
-    # Calculate and display estimated cost
-    gb_seconds = (requests * duration_ms * memory_mb) / (1000 * 1024)
-    estimated_cost = (requests * 0.0000002) + (gb_seconds * 0.0000166667)
-    st.metric("Estimated Monthly Cost", f"${estimated_cost:,.2f}")
-    
-    config.update({
-        "memory_mb": memory_mb,
-        "requests_per_month": requests,
-        "avg_duration_ms": duration_ms
-    })
-
+        
+        gb_seconds = (requests * duration_ms * memory_mb) / (1000 * 1024)
+        estimated_cost = (requests * 0.0000002) + (gb_seconds * 0.0000166667)
+        st.metric("Estimated Monthly Cost", f"${estimated_cost:,.2f}")
+        
+        config.update({
+            "memory_mb": memory_mb,
+            "requests_per_month": requests,
+            "avg_duration_ms": duration_ms
+        })
         
     elif service == "Amazon EKS":
         st.markdown("##### EKS Cluster Configuration")
-    
-    # Cluster configuration
-    col1, col2 = st.columns(2)
-    with col1:
-        node_count = st.number_input("Number of Worker Nodes", 1, 100, 2, key=f"{key_prefix}_nodes")
-    with col2:
-        cluster_hours = st.number_input("Cluster Hours/Month", 1, 744, 730, key=f"{key_prefix}_hours")
-    
-    # Node instance type
-    family = st.selectbox(
-        "Node Instance Family",
-        list(INSTANCE_FAMILIES.keys()),
-        key=f"{key_prefix}_node_family"
-    )
-    node_instance_types = list(INSTANCE_FAMILIES[family].keys())
-    node_instance_type = st.selectbox(
-        "Node Instance Type",
-        node_instance_types,
-        key=f"{key_prefix}_node_type"
-    )
-    
-    # Display node specs
-    node_specs = INSTANCE_FAMILIES[family][node_instance_type]
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        st.metric("Node vCPU", node_specs["vCPU"])
-    with col2:
-        st.metric("Node Memory (GiB)", node_specs["Memory"])
-    with col3:
-        st.metric("Node Price/Hour", f"${node_specs['Price']}")
-    
-    # Additional options
-    load_balancer = st.checkbox("Add Application Load Balancer", value=True, key=f"{key_prefix}_alb")
-    auto_scaling = st.checkbox("Enable Auto Scaling", value=True, key=f"{key_prefix}_asg")
-    
-    config.update({
-        "node_count": node_count,
-        "node_instance_type": node_instance_type,
-        "cluster_hours": cluster_hours,
-        "load_balancer": load_balancer,
-        "auto_scaling": auto_scaling
-    })
-    
-    # Calculate and display estimated cost
-    cluster_cost = cluster_hours * EKS_PRICING['cluster_per_hour']
-    node_cost = node_count * node_specs['Price'] * cluster_hours
-    total_estimated = cluster_cost + node_cost
-    
-    if load_balancer:
-        alb_cost = NETWORKING_PRICING['ELB']['Application'] * cluster_hours
-        total_estimated += alb_cost
-    
-    st.metric("Estimated Monthly Cost", f"${total_estimated:,.2f}")
-
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            node_count = st.number_input("Number of Worker Nodes", 1, 100, 2, key=f"{key_prefix}_nodes")
+        with col2:
+            cluster_hours = st.number_input("Cluster Hours/Month", 1, 744, 730, key=f"{key_prefix}_hours")
+        
+        family = st.selectbox(
+            "Node Instance Family",
+            list(INSTANCE_FAMILIES.keys()),
+            key=f"{key_prefix}_node_family"
+        )
+        node_instance_types = list(INSTANCE_FAMILIES[family].keys())
+        node_instance_type = st.selectbox(
+            "Node Instance Type",
+            node_instance_types,
+            key=f"{key_prefix}_node_type"
+        )
+        
+        node_specs = INSTANCE_FAMILIES[family][node_instance_type]
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.metric("Node vCPU", node_specs["vCPU"])
+        with col2:
+            st.metric("Node Memory (GiB)", node_specs["Memory"])
+        with col3:
+            st.metric("Node Price/Hour", f"${node_specs['Price']}")
+        
+        load_balancer = st.checkbox("Add Application Load Balancer", value=True, key=f"{key_prefix}_alb")
+        auto_scaling = st.checkbox("Enable Auto Scaling", value=True, key=f"{key_prefix}_asg")
+        
+        config.update({
+            "node_count": node_count,
+            "node_instance_type": node_instance_type,
+            "cluster_hours": cluster_hours,
+            "load_balancer": load_balancer,
+            "auto_scaling": auto_scaling
+        })
+        
+        cluster_cost = cluster_hours * EKS_PRICING['cluster_per_hour']
+        node_cost = node_count * node_specs['Price'] * cluster_hours
+        total_estimated = cluster_cost + node_cost
+        
+        if load_balancer:
+            alb_cost = NETWORKING_PRICING['ELB']['Application'] * cluster_hours
+            total_estimated += alb_cost
+        
+        st.metric("Estimated Monthly Cost", f"${total_estimated:,.2f}")
         
     elif service == "Amazon ECS":
         st.markdown("##### Container Configuration")
@@ -484,7 +444,6 @@ def render_service_configurator(service: str, key_prefix: str) -> Dict:
             key=f"{key_prefix}_launch_type"
         )
         
-        # Common configuration for both launch types
         tasks = st.number_input("Number of Tasks", 1, 100, 1, key=f"{key_prefix}_tasks")
         
         if launch_type == "Fargate":
@@ -496,7 +455,6 @@ def render_service_configurator(service: str, key_prefix: str) -> Dict:
                 memory = st.number_input("Memory (GB)", 0.5, 30.0, 1.0, 0.5, key=f"{key_prefix}_memory")
                 st.metric("Memory (GB)", memory)
             
-            # Calculate Fargate pricing
             price_per_vcpu_hour = 0.04048
             price_per_gb_hour = 0.004445
             price_per_task_hour = (vcpu * price_per_vcpu_hour) + (memory * price_per_gb_hour)
@@ -512,7 +470,6 @@ def render_service_configurator(service: str, key_prefix: str) -> Dict:
             })
             
         elif launch_type == "EC2":
-            # EC2-specific configuration
             family = st.selectbox(
                 "Instance Family",
                 list(INSTANCE_FAMILIES.keys()),
@@ -535,8 +492,7 @@ def render_service_configurator(service: str, key_prefix: str) -> Dict:
             with col3:
                 st.metric("Price/Hour", f"${specs['Price']}")
             
-            # Calculate EC2 pricing
-            instance_price_per_month = specs['Price'] * 730  # Hours per month
+            instance_price_per_month = specs['Price'] * 730
             total_price = instance_price_per_month * instance_count
             st.metric("Estimated Monthly Cost", f"${total_price:,.2f}")
             
@@ -610,7 +566,6 @@ def render_service_configurator(service: str, key_prefix: str) -> Dict:
             "avg_tokens": tokens
         })
     
-    # Region selection for all services
     config["region"] = st.selectbox(
         "Region",
         ["us-east-1", "us-west-2", "eu-west-1", "ap-southeast-1"],
@@ -623,10 +578,8 @@ def main():
     st.set_page_config(page_title="AWS Cloud Package Builder", layout="wide")
     st.title("🚀 AWS Cloud Package Builder")
     
-    # Initialize session state
     initialize_session_state()
     
-    # Project Requirements
     with st.expander("📋 Project Requirements", expanded=True):
         col1, col2 = st.columns(2)
         with col1:
@@ -664,10 +617,8 @@ def main():
                 key="expected_users"
             )
     
-    # Service Selection
     st.session_state.selected_services = ServiceSelector.render_service_selection()
     
-    # Always show configurations if services are selected
     if st.session_state.selected_services:
         st.header("🛠️ Service Configuration")
         
@@ -683,7 +634,6 @@ def main():
                     
                     service_key = f"{category}_{service}_{i}"
                     
-                    # Store configuration in session state
                     if service_key not in st.session_state:
                         st.session_state[service_key] = {}
                     
@@ -704,7 +654,6 @@ def main():
                         "cost": cost
                     }
         
-        # Cost Summary
         st.header("💰 Cost Summary")
         col1, col2, col3 = st.columns(3)
         with col1:
@@ -715,7 +664,6 @@ def main():
             budget_used = (st.session_state.total_cost / monthly_budget) * 100
             st.metric("Budget Utilized", f"{budget_used:.1f}%")
         
-        # Export Configuration
         st.download_button(
             "📥 Export Configuration",
             data=json.dumps({
