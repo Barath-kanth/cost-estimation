@@ -8,8 +8,6 @@ import pandas as pd
 from concurrent.futures import ThreadPoolExecutor
 import time
 
-
-
 def initialize_session_state():
     """Initialize session state variables"""
     if 'configurations' not in st.session_state:
@@ -20,33 +18,33 @@ def initialize_session_state():
         st.session_state.total_cost = 0.0
 
 AWS_SERVICES = {
-    "🚀 Compute": {
+    "Compute": {
         "Amazon EC2": "Virtual servers in the cloud",
         "AWS Lambda": "Serverless compute service",
         "Amazon ECS": "Fully managed container orchestration",
         "Amazon EKS": "Managed Kubernetes service"
     },
-    "💾 Storage": {
+    "Storage": {
         "Amazon S3": "Object storage service",
         "Amazon EBS": "Block storage for EC2",
         "Amazon EFS": "Managed file system"
     },
-    "🗄️ Database": {
+    "Database": {
         "Amazon RDS": "Managed relational database",
         "Amazon DynamoDB": "Managed NoSQL database",
         "Amazon ElastiCache": "In-memory caching"
     },
-    "🤖 AI/ML": {
+    "AI/ML": {
         "Amazon Bedrock": "Fully managed foundation models",
         "Amazon SageMaker": "Build, train and deploy ML models",
         "Amazon Comprehend": "Natural language processing"
     },
-    "🌐 Networking": {
+    "Networking": {
         "Amazon VPC": "Isolated cloud resources",
         "Amazon CloudFront": "Global content delivery network",
         "Elastic Load Balancing": "Distribute incoming traffic"
     },
-    "🔒 Security": {
+    "Security": {
         "AWS WAF": "Web Application Firewall",
         "Amazon GuardDuty": "Threat detection service",
         "AWS Shield": "DDoS protection"
@@ -57,26 +55,22 @@ class ServiceSelector:
     @staticmethod
     def render_service_selection() -> Dict[str, List[str]]:
         """Render service selection UI and return selected services"""
-        st.markdown("""
-        <div class='custom-card'>
-            <h3 style='color: #1e293b !important; margin-bottom: 0.5rem;'>🎯 Select AWS Services</h3>
-            <p style='color: #64748b !important; margin: 0;'>Choose the services that best fit your architecture needs</p>
-        </div>
-        """, unsafe_allow_html=True)
+        st.subheader("Select AWS Services")
+        st.write("Choose the services that best fit your architecture needs")
         
         selected_services = {}
         
         tabs = st.tabs(list(AWS_SERVICES.keys()))
         for i, (category, services) in enumerate(AWS_SERVICES.items()):
             with tabs[i]:
-                st.markdown(f"### {category.split(' ')[1]} Services")
+                st.write(f"**{category} Services**")
                 
                 cols = st.columns(2)
                 for j, (service, description) in enumerate(services.items()):
                     col_idx = j % 2
                     with cols[col_idx]:
                         if st.checkbox(
-                            f"**{service}**", 
+                            f"{service}", 
                             help=description,
                             key=f"service_{category}_{j}"
                         ):
@@ -86,7 +80,6 @@ class ServiceSelector:
         
         return selected_services
 
-# Pricing configurations (keeping the same as before)
 INSTANCE_FAMILIES = {
     "General Purpose": {
         "t3.micro": {"vCPU": 2, "Memory": 1, "Price": 0.0104},
@@ -391,7 +384,7 @@ def render_service_configurator(service: str, key_prefix: str) -> Dict:
     config = {}
     
     if service == "Amazon EC2":
-        st.markdown("##### 🖥️ Instance Configuration")
+        st.write("**Instance Configuration**")
         family = st.selectbox(
             "Instance Family",
             list(INSTANCE_FAMILIES.keys()),
@@ -441,7 +434,7 @@ def render_service_configurator(service: str, key_prefix: str) -> Dict:
         })
         
     elif service == "Amazon RDS":
-        st.markdown("##### 🗄️ Database Configuration")
+        st.write("**Database Configuration**")
         engine = st.selectbox(
             "Database Engine",
             list(DATABASE_PRICING.keys()),
@@ -481,7 +474,7 @@ def render_service_configurator(service: str, key_prefix: str) -> Dict:
         })
         
     elif service == "Amazon EBS":
-        st.markdown("##### 💾 EBS Volume Configuration")
+        st.write("**EBS Volume Configuration**")
         
         col1, col2 = st.columns(2)
         with col1:
@@ -521,7 +514,7 @@ def render_service_configurator(service: str, key_prefix: str) -> Dict:
         })
         
     elif service == "AWS Lambda":
-        st.markdown("##### ⚡ Lambda Function Configuration")
+        st.write("**Lambda Function Configuration**")
         
         col1, col2, col3 = st.columns(3)
         with col1:
@@ -566,7 +559,7 @@ def render_service_configurator(service: str, key_prefix: str) -> Dict:
         })
         
     elif service == "Amazon EKS":
-        st.markdown("##### 🐳 EKS Cluster Configuration")
+        st.write("**EKS Cluster Configuration**")
         
         col1, col2 = st.columns(2)
         with col1:
@@ -617,7 +610,7 @@ def render_service_configurator(service: str, key_prefix: str) -> Dict:
         st.metric("Estimated Monthly Cost", f"${total_estimated:,.2f}")
         
     elif service == "Amazon ECS":
-        st.markdown("##### 🐳 Container Configuration")
+        st.write("**Container Configuration**")
         launch_type = st.radio(
             "Launch Type",
             ["Fargate", "EC2"],
@@ -684,7 +677,7 @@ def render_service_configurator(service: str, key_prefix: str) -> Dict:
             })
             
     elif service == "Amazon S3":
-        st.markdown("##### ☁️ Storage Configuration")
+        st.write("**Storage Configuration**")
         storage_class = st.selectbox(
             "Storage Class",
             list(STORAGE_PRICING.keys()),
@@ -705,7 +698,7 @@ def render_service_configurator(service: str, key_prefix: str) -> Dict:
         })
         
     elif service == "Amazon Bedrock":
-        st.markdown("##### 🤖 Model Configuration")
+        st.write("**Model Configuration**")
         model = st.selectbox(
             "Foundation Model",
             list(AI_ML_PRICING["Bedrock"].keys()),
@@ -724,7 +717,7 @@ def render_service_configurator(service: str, key_prefix: str) -> Dict:
         })
     
     commitment = st.selectbox(
-        "💎 Commitment Level",
+        "Commitment Level",
         ["none", "1-year", "3-year"],
         help="Savings Plans/Reserved Instances commitment",
         key=f"{key_prefix}_commitment"
@@ -732,7 +725,7 @@ def render_service_configurator(service: str, key_prefix: str) -> Dict:
     config["commitment"] = commitment
     
     config["region"] = st.selectbox(
-        "🌍 Region",
+        "Region",
         ["us-east-1", "us-west-2", "eu-west-1", "ap-northeast-1", "ap-southeast-1"],
         key=f"{key_prefix}_region"
     )
@@ -742,32 +735,23 @@ def render_service_configurator(service: str, key_prefix: str) -> Dict:
 def main():
     st.set_page_config(page_title="AWS Cloud Package Builder", layout="wide")
     
-    # Inject custom CSS
-    inject_custom_css()
+    # Remove all custom CSS and use default Streamlit styling
     
     # Main title
-    st.markdown("""
-    <div style='text-align: center; padding: 1rem 0;'>
-        <h1>🚀 AWS Cloud Package Builder</h1>
-        <p style='color: #64748b !important; font-size: 1.1rem;'>Design, Configure, and Optimize Your Cloud Architecture</p>
-    </div>
-    """, unsafe_allow_html=True)
+    st.title("AWS Cloud Package Builder")
+    st.write("Design, Configure, and Optimize Your Cloud Architecture")
     
     initialize_session_state()
     
     # PROJECT REQUIREMENTS SECTION
-    with st.expander("🎯 Project Requirements & Architecture", expanded=True):
-        st.markdown("""
-        <div class='custom-card'>
-            <h3 style='color: #1e293b !important; margin-bottom: 0.5rem;'>📋 Define Your Project Requirements</h3>
-            <p style='color: #64748b !important; margin: 0;'>Configure your workload profile, performance needs, and budget constraints</p>
-        </div>
-        """, unsafe_allow_html=True)
+    with st.expander("Project Requirements & Architecture", expanded=True):
+        st.write("**Define Your Project Requirements**")
+        st.write("Configure your workload profile, performance needs, and budget constraints")
         
         col1, col2, col3 = st.columns(3)
         
         with col1:
-            st.subheader("📊 Workload Profile")
+            st.subheader("Workload Profile")
             workload_complexity = st.select_slider(
                 "Workload Complexity",
                 options=["Simple", "Moderate", "Complex", "Enterprise"],
@@ -788,7 +772,7 @@ def main():
             )
             
         with col2:
-            st.subheader("⚡ Performance Needs")
+            st.subheader("Performance Needs")
             performance_tier = st.select_slider(
                 "Performance Tier",
                 options=["Development", "Testing", "Production", "Enterprise"],
@@ -806,7 +790,7 @@ def main():
             )
             
         with col3:
-            st.subheader("💰 Budget & Strategy")
+            st.subheader("Budget & Strategy")
             monthly_budget = st.number_input(
                 "Monthly Budget ($)", 
                 100, 1000000, 100,
@@ -826,7 +810,7 @@ def main():
             )
             
         # Additional requirements
-        with st.expander("🔧 Advanced Requirements"):
+        with st.expander("Advanced Requirements"):
             col1, col2 = st.columns(2)
             with col1:
                 compliance_requirements = st.multiselect(
@@ -855,7 +839,7 @@ def main():
     st.session_state.selected_services = ServiceSelector.render_service_selection()
     
     if st.session_state.selected_services:
-        st.header("🛠️ Service Configuration")
+        st.header("Service Configuration")
         
         st.session_state.total_cost = 0
         st.session_state.configurations = {}
@@ -864,8 +848,8 @@ def main():
             st.subheader(f"{category}")
             
             for i, service in enumerate(services):
-                with st.expander(f"⚙️ {service}", expanded=True):
-                    st.markdown(f"*{AWS_SERVICES[category][service]}*")
+                with st.expander(f"{service}", expanded=True):
+                    st.write(f"*{AWS_SERVICES[category][service]}*")
                     
                     service_key = f"{category}_{service}_{i}"
                     
@@ -890,11 +874,7 @@ def main():
                     }
         
         # Cost Summary
-        st.markdown("""
-        <div class='custom-card'>
-            <h3 style='color: #1e293b !important; margin-bottom: 1rem;'>💰 Cost Summary & Recommendations</h3>
-        </div>
-        """, unsafe_allow_html=True)
+        st.header("Cost Summary & Recommendations")
         
         col1, col2, col3, col4 = st.columns(4)
         with col1:
@@ -914,31 +894,27 @@ def main():
             st.progress(budget_percentage)
         
         # Cost optimization recommendations
-        with st.expander("💡 Cost Optimization Recommendations", expanded=True):
+        with st.expander("Cost Optimization Recommendations", expanded=True):
             if st.session_state.total_cost > monthly_budget:
-                st.error("⚠️ Your estimated costs exceed your budget. Consider:")
-                st.write("• 🔧 Right-size instances based on actual usage patterns")
-                st.write("• 📈 Implement auto-scaling for variable workloads")
-                st.write("• 💰 Use Savings Plans for committed usage")
-                st.write("• 🎯 Consider spot instances for fault-tolerant workloads")
-                st.write("• 💾 Optimize storage classes and lifecycle policies")
+                st.error("Your estimated costs exceed your budget. Consider:")
+                st.write("• Right-size instances based on actual usage patterns")
+                st.write("• Implement auto-scaling for variable workloads")
+                st.write("• Use Savings Plans for committed usage")
+                st.write("• Consider spot instances for fault-tolerant workloads")
+                st.write("• Optimize storage classes and lifecycle policies")
             else:
-                st.success("✅ Your architecture is within budget! Suggestions:")
-                st.write("• 📊 Implement monitoring for cost optimization")
-                st.write("• 💎 Consider Reserved Instances for stable workloads")
-                st.write("• 🔄 Review storage lifecycle policies")
-                st.write("• ⚡ Enable cost anomaly detection")
+                st.success("Your architecture is within budget! Suggestions:")
+                st.write("• Implement monitoring for cost optimization")
+                st.write("• Consider Reserved Instances for stable workloads")
+                st.write("• Review storage lifecycle policies")
+                st.write("• Enable cost anomaly detection")
         
         # Export configuration
-        st.markdown("""
-        <div class='custom-card'>
-            <h3 style='color: #1e293b !important; margin-bottom: 0.5rem;'>📥 Export Configuration</h3>
-            <p style='color: #64748b !important; margin: 0;'>Download your complete architecture configuration for future reference</p>
-        </div>
-        """, unsafe_allow_html=True)
+        st.header("Export Configuration")
+        st.write("Download your complete architecture configuration for future reference")
         
         st.download_button(
-            "📥 Export Configuration as JSON",
+            "Export Configuration as JSON",
             data=json.dumps({
                 "requirements": {
                     "workload_complexity": workload_complexity,
