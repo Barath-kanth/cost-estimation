@@ -85,7 +85,7 @@ class InnovativePricing:
         
         # Time-based discounts
         current_hour = datetime.now().hour
-        time_multiplier = 0.8 if 0 <= current_hour < 6 else 1.0  # Night time discount
+        time_multiplier = 0.8 if 0 <= current_hour < 6 else 1.0
         
         # Region-based adjustments
         region_multipliers = {
@@ -98,18 +98,65 @@ class InnovativePricing:
         # Calculate base price based on service and configuration
         if service == "Amazon EC2":
             instance_type = config.get('instance_type', 't3.micro')
-            vcpu = float(instance_type.split('.')[-1].replace('xlarge', '')) * 2
-            base_price = vcpu * 0.05 * 730  # $0.05 per vCPU hour
+            # Get price from INSTANCE_FAMILIES
+            for family in INSTANCE_FAMILIES.values():
+                if instance_type in family:
+                    base_price = family[instance_type]['Price'] * 730  # Hours per month
+                    break
+            
+            # Add storage cost
+            storage_gb = config.get('storage_gb', 30)
+            storage_cost = storage_gb * 0.10  # $0.10 per GB/month for EBS
+            base_price = (base_price * config.get('instance_count', 1)) + storage_cost
             
         elif service == "Amazon RDS":
+            instance_type = config.get('instance_type')
+            engine = config.get('engine')
+            if engine in DATABASE_PRICING and instance_type in DATABASE_PRICING[engine]:
+                base_price = DATABASE_PRICING[engine][instance_type]['Price'] * 730
+                
             storage_gb = config.get('storage_gb', 20)
-            base_price = storage_gb * 0.115 + 0.17 * 730  # Storage + compute
+            base_price += storage_gb * 0.115  # RDS storage cost
+            
+            if config.get('multi_az', False):
+                base_price *= 2  # Double cost for Multi-AZ
+            
+        elif service == "Amazon S3":
+            storage_class = config.get('storage_class', 'Standard')
+            storage_gb = config.get('storage_gb', 100)
+            requests = config.get('requests_per_month', 100000)
+            
+            base_price = (storage_gb * STORAGE_PRICING[storage_class]) + (requests / 1000 * 0.0004)
             
         elif service == "AWS Lambda":
+            memory_mb = config.get('memory_mb', 128)
             requests = config.get('requests_per_month', 1000000)
-            memory = config.get('memory_mb', 128)
-            base_price = (requests * 0.0000002) + (memory * 0.0000166667 * 730)
+            duration_ms = config.get('avg_duration_ms', 100)
             
+            gb_seconds = (requests * duration_ms * memory_mb) / (1000 * 1024)
+            base_price = (requests * 0.0000002) + (gb_seconds * 0.0000166667)
+            
+        elif service == "Amazon Bedrock":
+            model = config.get('model', 'Claude')
+            requests = config.get('requests_per_month', 10000)
+            tokens = config.get('avg_tokens', 1000)
+            
+            base_price = (requests * tokens / 1000) * AI_ML_PRICING['Bedrock'][model]
+            
+        elif service == "Amazon CloudFront":
+            data_gb = config.get('data_transfer_gb', 1000)
+            requests = config.get('requests', 100000)
+            
+            base_price = (data_gb * NETWORKING_PRICING['CloudFront']['price_per_gb'] +
+                         (requests / 1000) * NETWORKING_PRICING['CloudFront']['requests_per_1000'])
+            
+        elif service == "AWS WAF":
+            acls = config.get('web_acls', 1)
+            rules = config.get('rules', 5)
+            
+            base_price = (acls * SECURITY_PRICING['WAF']['price_per_acl'] +
+                         rules * SECURITY_PRICING['WAF']['price_per_rule'])
+        
         # Apply multipliers
         final_price = (
             base_price *
