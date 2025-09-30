@@ -328,7 +328,22 @@ def render_service_configurator(service: str) -> Dict:
         
         rule_types = st.multiselect(
             "Rule Types",
-            ["Rate Limiting", "IP Reputation", "SQL Injection", "XSS
+            ["Rate Limiting", "IP Reputation", "SQL Injection", "XSS Protection",
+             "Geo Blocking", "Custom Rules"]
+        )
+        
+        config["web_acls"] = web_acls
+        config["rules"] = rules
+        config["rule_types"] = rule_types
+    
+    # Add region selection for all services
+    config["region"] = st.selectbox(
+        "Region",
+        ["us-east-1", "us-west-2", "eu-west-1", "ap-southeast-1"]
+    )
+    
+    return config
+
 
 def render_service_configurator(service: str) -> Dict:
     """Render configuration options for selected service"""
