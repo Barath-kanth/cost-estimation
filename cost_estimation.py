@@ -419,61 +419,62 @@ def render_service_configurator(service: str, key_prefix: str) -> Dict:
     })
 
         
-    elif service == "Amazon EKS":
-        st.markdown("##### EKS Cluster Configuration")
-        
-        # Cluster configuration
-        col1, col2 = st.columns(2)
-        with col1:
-            node_count = st.number_input("Number of Worker Nodes", 1, 100, 2, key=f"{key_prefix}_nodes")
-        with col2:
-            cluster_hours = st.number_input("Cluster Hours/Month", 1, 744, 730, key=f"{key_prefix}_hours")
-        
-        # Node instance type
-        family = st.selectbox(
-            "Node Instance Family",
-            list(INSTANCE_FAMILIES.keys()),
-            key=f"{key_prefix}_node_family"
-        )
-        node_instance_types = list(INSTANCE_FAMILIES[family].keys())
-        node_instance_type = st.selectbox(
-            "Node Instance Type",
-            node_instance_types,
-            key=f"{key_prefix}_node_type"
-        )
-        
-        # Display node specs
-        node_specs = INSTANCE_FAMILIES[family][node_instance_type]
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            st.metric("Node vCPU", node_specs["vCPU"])
-        with col2:
-            st.metric("Node Memory (GiB)", node_specs["Memory"])
-        with col3:
-            st.metric("Node Price/Hour", f"${node_specs['Price']}")
-        
-        # Additional options
-        load_balancer = st.checkbox("Add Application Load Balancer", value=True, key=f"{key_prefix}_alb")
-        auto_scaling = st.checkbox("Enable Auto Scaling", value=True, key=f"{key_prefix}_asg")
-        
-        config.update({
-            "node_count": node_count,
-            "node_instance_type": node_instance_type,
-            "cluster_hours": cluster_hours,
-            "load_balancer": load_balancer,
-            "auto_scaling": auto_scaling
-        })
-        
-        # Calculate and display estimated cost
-        cluster_cost = cluster_hours * EKS_PRICING['cluster_per_hour']
-        node_cost = node_count * node_specs['Price'] * cluster_hours
-        total_estimated = cluster_cost + node_cost
-        
-        if load_balancer:
-            alb_cost = NETWORKING_PRICING['ELB']['Application'] * cluster_hours
-            total_estimated += alb_cost
-        
-        st.metric("Estimated Monthly Cost", f"${total_estimated:,.2f}")
+elif service == "Amazon EKS":
+    st.markdown("##### EKS Cluster Configuration")
+    
+    # Cluster configuration
+    col1, col2 = st.columns(2)
+    with col1:
+        node_count = st.number_input("Number of Worker Nodes", 1, 100, 2, key=f"{key_prefix}_nodes")
+    with col2:
+        cluster_hours = st.number_input("Cluster Hours/Month", 1, 744, 730, key=f"{key_prefix}_hours")
+    
+    # Node instance type
+    family = st.selectbox(
+        "Node Instance Family",
+        list(INSTANCE_FAMILIES.keys()),
+        key=f"{key_prefix}_node_family"
+    )
+    node_instance_types = list(INSTANCE_FAMILIES[family].keys())
+    node_instance_type = st.selectbox(
+        "Node Instance Type",
+        node_instance_types,
+        key=f"{key_prefix}_node_type"
+    )
+    
+    # Display node specs
+    node_specs = INSTANCE_FAMILIES[family][node_instance_type]
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.metric("Node vCPU", node_specs["vCPU"])
+    with col2:
+        st.metric("Node Memory (GiB)", node_specs["Memory"])
+    with col3:
+        st.metric("Node Price/Hour", f"${node_specs['Price']}")
+    
+    # Additional options
+    load_balancer = st.checkbox("Add Application Load Balancer", value=True, key=f"{key_prefix}_alb")
+    auto_scaling = st.checkbox("Enable Auto Scaling", value=True, key=f"{key_prefix}_asg")
+    
+    config.update({
+        "node_count": node_count,
+        "node_instance_type": node_instance_type,
+        "cluster_hours": cluster_hours,
+        "load_balancer": load_balancer,
+        "auto_scaling": auto_scaling
+    })
+    
+    # Calculate and display estimated cost
+    cluster_cost = cluster_hours * EKS_PRICING['cluster_per_hour']
+    node_cost = node_count * node_specs['Price'] * cluster_hours
+    total_estimated = cluster_cost + node_cost
+    
+    if load_balancer:
+        alb_cost = NETWORKING_PRICING['ELB']['Application'] * cluster_hours
+        total_estimated += alb_cost
+    
+    st.metric("Estimated Monthly Cost", f"${total_estimated:,.2f}")
+
         
     elif service == "Amazon ECS":
         st.markdown("##### Container Configuration")
