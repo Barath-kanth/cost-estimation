@@ -146,6 +146,190 @@ INSTANCE_FAMILIES = {
     }
 }
 
+# Add these pricing configurations after INSTANCE_FAMILIES
+DATABASE_PRICING = {
+    "PostgreSQL": {
+        "db.t3.micro": {"vCPU": 1, "Memory": 1, "Price": 0.017},
+        "db.t3.small": {"vCPU": 2, "Memory": 2, "Price": 0.034},
+        "db.t3.medium": {"vCPU": 2, "Memory": 4, "Price": 0.068},
+        "db.r5.large": {"vCPU": 2, "Memory": 16, "Price": 0.24}
+    },
+    "MySQL": {
+        "db.t3.micro": {"vCPU": 1, "Memory": 1, "Price": 0.017},
+        "db.t3.small": {"vCPU": 2, "Memory": 2, "Price": 0.034},
+        "db.t3.medium": {"vCPU": 2, "Memory": 4, "Price": 0.068},
+        "db.r5.large": {"vCPU": 2, "Memory": 16, "Price": 0.24}
+    }
+}
+
+STORAGE_PRICING = {
+    "Standard": 0.023,
+    "Intelligent-Tiering": 0.0125,
+    "Standard-IA": 0.0125,
+    "One Zone-IA": 0.01,
+    "Glacier": 0.004,
+    "Glacier Deep Archive": 0.00099
+}
+
+AI_ML_PRICING = {
+    "Bedrock": {
+        "Claude": 0.0008,
+        "Llama 2": 0.0004,
+        "Stable Diffusion": 0.001,
+        "Jurassic": 0.001
+    },
+    "SageMaker": {
+        "ml.t3.medium": 0.0464,
+        "ml.t3.large": 0.0928,
+        "ml.t3.xlarge": 0.1856,
+        "ml.p3.2xlarge": 3.06
+    }
+}
+
+NETWORKING_PRICING = {
+    "CloudFront": {
+        "price_per_gb": 0.085,
+        "requests_per_1000": 0.0075
+    },
+    "ELB": {
+        "Application": 0.0225,
+        "Network": 0.0225,
+        "Gateway": 0.0225,
+        "price_per_lcu_hour": 0.008
+    }
+}
+
+SECURITY_PRICING = {
+    "WAF": {
+        "price_per_rule": 1,
+        "price_per_request_million": 0.60,
+        "price_per_acl": 5
+    },
+    "GuardDuty": {
+        "price_per_gb": 0.001,
+        "base_price": 4.00
+    },
+    "Shield": {
+        "standard": 0,
+        "advanced": 3000
+    }
+}
+
+def render_service_configurator(service: str) -> Dict:
+    """Render configuration options for selected service"""
+    config = {}
+    
+    if service == "Amazon EC2":
+        # ... existing EC2 configuration code ...
+        pass
+        
+    elif service == "Amazon RDS":
+        st.markdown("##### Database Configuration")
+        
+        engine = st.selectbox(
+            "Database Engine",
+            list(DATABASE_PRICING.keys())
+        )
+        
+        instance_types = list(DATABASE_PRICING[engine].keys())
+        selected_type = st.selectbox("Instance Type", instance_types)
+        specs = DATABASE_PRICING[engine][selected_type]
+        
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.metric("vCPU", specs["vCPU"])
+        with col2:
+            st.metric("Memory (GiB)", specs["Memory"])
+        with col3:
+            st.metric("Price/Hour", f"${specs['Price']}")
+        
+        config["engine"] = engine
+        config["instance_type"] = selected_type
+        config["storage_gb"] = st.number_input("Storage (GB)", 20, 65536, 100)
+        config["multi_az"] = st.checkbox("Multi-AZ Deployment")
+        config["backup_retention"] = st.slider("Backup Retention (Days)", 0, 35, 7)
+    
+    elif service == "Amazon S3":
+        st.markdown("##### Storage Configuration")
+        
+        storage_class = st.selectbox(
+            "Storage Class",
+            list(STORAGE_PRICING.keys())
+        )
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            storage_gb = st.number_input("Storage (GB)", 1, 1000000, 100)
+            st.metric("Price/GB/Month", f"${STORAGE_PRICING[storage_class]}")
+        with col2:
+            requests_per_month = st.number_input(
+                "Monthly Requests (thousands)",
+                1, 1000000, 100
+            ) * 1000
+        
+        config["storage_class"] = storage_class
+        config["storage_gb"] = storage_gb
+        config["requests_per_month"] = requests_per_month
+    
+    elif service == "Amazon Bedrock":
+        st.markdown("##### Model Configuration")
+        
+        model = st.selectbox(
+            "Foundation Model",
+            list(AI_ML_PRICING["Bedrock"].keys())
+        )
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            requests = st.number_input(
+                "Monthly Requests",
+                1000, 10000000, 10000
+            )
+            st.metric("Price/1K Tokens", f"${AI_ML_PRICING['Bedrock'][model]}")
+        with col2:
+            avg_tokens = st.number_input(
+                "Average Tokens per Request",
+                100, 10000, 1000
+            )
+        
+        config["model"] = model
+        config["requests_per_month"] = requests
+        config["avg_tokens"] = avg_tokens
+    
+    elif service == "Amazon CloudFront":
+        st.markdown("##### CDN Configuration")
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            data_transfer_gb = st.number_input(
+                "Monthly Data Transfer (GB)",
+                1, 1000000, 1000
+            )
+            st.metric("Price/GB", f"${NETWORKING_PRICING['CloudFront']['price_per_gb']}")
+        with col2:
+            requests = st.number_input(
+                "Monthly Requests (thousands)",
+                1, 1000000, 100
+            ) * 1000
+        
+        config["data_transfer_gb"] = data_transfer_gb
+        config["requests"] = requests
+    
+    elif service == "AWS WAF":
+        st.markdown("##### WAF Configuration")
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            web_acls = st.number_input("Number of Web ACLs", 1, 100, 1)
+            st.metric("Price/ACL/Month", f"${SECURITY_PRICING['WAF']['price_per_acl']}")
+        with col2:
+            rules = st.number_input("Number of Rules", 1, 1000, 5)
+            st.metric("Price/Rule/Month", f"${SECURITY_PRICING['WAF']['price_per_rule']}")
+        
+        rule_types = st.multiselect(
+            "Rule Types",
+            ["Rate Limiting", "IP Reputation", "SQL Injection", "XSS
+
 def render_service_configurator(service: str) -> Dict:
     """Render configuration options for selected service"""
     config = {}
