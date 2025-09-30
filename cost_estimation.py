@@ -191,8 +191,8 @@ class InnovativePricing:
 
         
     # Apply region multiplier for Lambda
-            region = config.get('region', 'us-east-1')
-            base_price *= region_multipliers.get(region, 1.0)
+        region = config.get('region', 'us-east-1')
+        base_price *= region_multipliers.get(region, 1.0)
 
             
         elif service == "Amazon Bedrock":
