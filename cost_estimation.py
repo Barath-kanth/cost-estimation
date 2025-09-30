@@ -8,22 +8,24 @@ import pandas as pd
 from concurrent.futures import ThreadPoolExecutor
 import time
 
-# Custom CSS for improved styling
+# Custom CSS for TwinCoreTech color scheme
 def inject_custom_css():
     st.markdown("""
     <style>
-    /* Main theme colors */
+    /* TwinCoreTech Color Scheme */
     :root {
-        --primary: #FF6B35;
-        --secondary: #004E89;
-        --accent: #00A8E8;
-        --background: #F7F9FC;
-        --card-bg: #FFFFFF;
-        --text: #00000;
-        --text-light: #718096;
-        --success: #48BB78;
-        --warning: #ED8936;
-        --error: #E53E3E;
+        --primary: #2563eb;      /* Blue - Primary brand color */
+        --primary-dark: #1d4ed8; /* Darker blue */
+        --secondary: #059669;    /* Green - Secondary brand color */
+        --accent: #7c3aed;      /* Purple - Accent color */
+        --background: #ffffff;   /* White background */
+        --card-bg: #f8fafc;     /* Light gray card background */
+        --text: #1e293b;        /* Dark gray text */
+        --text-light: #64748b;  /* Light gray text */
+        --border: #e2e8f0;      /* Border color */
+        --success: #10b981;     /* Success green */
+        --warning: #f59e0b;     /* Warning amber */
+        --error: #ef4444;       /* Error red */
     }
     
     .main {
@@ -31,47 +33,54 @@ def inject_custom_css():
     }
     
     .stApp {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        background-color: var(--background);
+        color: var(--text);
     }
     
-    /* Headers */
-    h1, h2, h3 {
-        color: var(--secondary) !important;
-        font-weight: 700 !important;
+    /* Headers with TwinCoreTech styling */
+    h1, h2, h3, h4, h5, h6 {
+        color: var(--text) !important;
+        font-weight: 600 !important;
+        font-family: 'Inter', sans-serif !important;
     }
     
     h1 {
-        background: linear-gradient(45deg, #FF6B35, #FF8E53);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-        text-align: center;
+        color: var(--primary) !important;
+        border-bottom: 3px solid var(--primary);
+        padding-bottom: 0.5rem;
         margin-bottom: 2rem !important;
     }
     
     /* Cards and containers */
     .stExpander {
         background-color: var(--card-bg) !important;
-        border-radius: 12px !important;
-        border: 1px solid #E2E8F0 !important;
-        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06) !important;
+        border-radius: 8px !important;
+        border: 1px solid var(--border) !important;
+        box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1) !important;
     }
     
-    .stButton>button {
-        background: linear-gradient(45deg, #FF6B35, #FF8E53) !important;
+    .stExpander > div > div {
+        background-color: var(--card-bg) !important;
+    }
+    
+    /* Buttons - TwinCoreTech blue */
+    .stButton > button {
+        background-color: var(--primary) !important;
         color: white !important;
         border: none !important;
-        border-radius: 8px !important;
+        border-radius: 6px !important;
         padding: 0.5rem 1rem !important;
-        font-weight: 600 !important;
-        transition: all 0.3s ease !important;
+        font-weight: 500 !important;
+        transition: all 0.2s ease !important;
     }
     
-    .stButton>button:hover {
-        transform: translateY(-2px) !important;
-        box-shadow: 0 6px 12px rgba(255, 107, 53, 0.3) !important;
+    .stButton > button:hover {
+        background-color: var(--primary-dark) !important;
+        transform: translateY(-1px) !important;
+        box-shadow: 0 4px 6px -1px rgba(37, 99, 235, 0.3) !important;
     }
     
-    /* Metrics */
+    /* Metrics - TwinCoreTech styling */
     [data-testid="stMetricValue"] {
         color: var(--primary) !important;
         font-weight: 700 !important;
@@ -80,19 +89,23 @@ def inject_custom_css():
     
     [data-testid="stMetricLabel"] {
         color: var(--text-light) !important;
-        font-weight: 600 !important;
+        font-weight: 500 !important;
     }
     
-    /* Tabs */
+    /* Tabs - TwinCoreTech styling */
     .stTabs [data-baseweb="tab-list"] {
-        gap: 8px;
+        gap: 4px;
+        background-color: var(--card-bg);
+        padding: 4px;
+        border-radius: 8px;
     }
     
     .stTabs [data-baseweb="tab"] {
-        background-color: #E2E8F0 !important;
-        border-radius: 8px 8px 0 0 !important;
+        background-color: transparent !important;
+        border-radius: 6px !important;
         padding: 10px 16px !important;
-        font-weight: 600 !important;
+        font-weight: 500 !important;
+        color: var(--text-light) !important;
     }
     
     .stTabs [aria-selected="true"] {
@@ -102,7 +115,8 @@ def inject_custom_css():
     
     /* Checkboxes */
     .stCheckbox [data-baseweb="checkbox"] {
-        background-color: var(--card-bg) !important;
+        background-color: white !important;
+        border-color: var(--border) !important;
     }
     
     .stCheckbox [data-baseweb="checkbox"]:checked {
@@ -112,49 +126,125 @@ def inject_custom_css():
     
     /* Select boxes */
     .stSelectbox [data-baseweb="select"] {
-        border-radius: 8px !important;
+        border-radius: 6px !important;
+        border-color: var(--border) !important;
     }
     
     /* Number input */
     .stNumberInput [data-baseweb="input"] {
-        border-radius: 8px !important;
+        border-radius: 6px !important;
+        border-color: var(--border) !important;
+    }
+    
+    /* Text input */
+    .stTextInput [data-baseweb="input"] {
+        border-radius: 6px !important;
+        border-color: var(--border) !important;
+    }
+    
+    /* Sliders */
+    .stSlider [data-baseweb="slider"] {
+        color: var(--primary) !important;
+    }
+    
+    /* Radio buttons */
+    .stRadio [data-baseweb="radio"] div:first-child {
+        background-color: white !important;
+        border-color: var(--border) !important;
+    }
+    
+    .stRadio [data-baseweb="radio"] div:first-child[data-is-active="true"] {
+        background-color: var(--primary) !important;
+        border-color: var(--primary) !important;
     }
     
     /* Success/Warning/Error messages */
     .stAlert {
         border-radius: 8px !important;
+        border: 1px solid !important;
+    }
+    
+    .stAlert [data-testid="stMarkdownContainer"] {
+        color: inherit !important;
     }
     
     /* Download button */
-    .stDownloadButton>button {
-        background: linear-gradient(45deg, #004E89, #00A8E8) !important;
+    .stDownloadButton > button {
+        background-color: var(--secondary) !important;
         color: white !important;
         border: none !important;
-        border-radius: 8px !important;
+        border-radius: 6px !important;
         padding: 0.75rem 1.5rem !important;
-        font-size: 1.1rem !important;
         font-weight: 600 !important;
+    }
+    
+    .stDownloadButton > button:hover {
+        background-color: #047857 !important;
+        transform: translateY(-1px) !important;
     }
     
     /* Custom card styling */
     .custom-card {
         background: var(--card-bg);
-        border-radius: 12px;
+        border-radius: 8px;
         padding: 1.5rem;
-        border: 1px solid #E2E8F0;
-        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        border: 1px solid var(--border);
         margin-bottom: 1rem;
-    }
-    
-    /* Service icons */
-    .service-icon {
-        font-size: 1.5rem;
-        margin-right: 0.5rem;
     }
     
     /* Progress bar */
     .stProgress > div > div > div {
-        background: linear-gradient(45deg, #FF6B35, #FF8E53) !important;
+        background-color: var(--primary) !important;
+    }
+    
+    /* Fix text colors throughout the app */
+    .stMarkdown {
+        color: var(--text) !important;
+    }
+    
+    .stCheckbox label {
+        color: var(--text) !important;
+    }
+    
+    .stSelectbox label {
+        color: var(--text) !important;
+    }
+    
+    .stNumberInput label {
+        color: var(--text) !important;
+    }
+    
+    .stTextInput label {
+        color: var(--text) !important;
+    }
+    
+    .stRadio label {
+        color: var(--text) !important;
+    }
+    
+    .stSlider label {
+        color: var(--text) !important;
+    }
+    
+    /* Expander header */
+    .streamlit-expanderHeader {
+        color: var(--text) !important;
+        font-weight: 600 !important;
+    }
+    
+    /* Fix any white text issues */
+    div[data-testid="stExpander"] div[class*="header"] {
+        color: var(--text) !important;
+    }
+    
+    /* Ensure all text is visible */
+    p, span, div {
+        color: var(--text) !important;
+    }
+    
+    /* Select slider styling */
+    [data-testid="stStyledFullScreenFrame"] {
+        background-color: var(--background) !important;
     }
     </style>
     """, unsafe_allow_html=True)
@@ -208,8 +298,8 @@ class ServiceSelector:
         """Render service selection UI and return selected services"""
         st.markdown("""
         <div class='custom-card'>
-            <h3>🎯 Select AWS Services</h3>
-            <p>Choose the services that best fit your architecture needs</p>
+            <h3 style='color: var(--text); margin-bottom: 0.5rem;'>🎯 Select AWS Services</h3>
+            <p style='color: var(--text-light); margin: 0;'>Choose the services that best fit your architecture needs</p>
         </div>
         """, unsafe_allow_html=True)
         
@@ -235,6 +325,8 @@ class ServiceSelector:
         
         return selected_services
 
+# ... (keep all the existing pricing dictionaries and classes the same) ...
+
 INSTANCE_FAMILIES = {
     "General Purpose": {
         "t3.micro": {"vCPU": 2, "Memory": 1, "Price": 0.0104},
@@ -255,7 +347,8 @@ INSTANCE_FAMILIES = {
     }
 }
 
-# Enhanced RDS Pricing with more engines and options
+# ... (keep all the existing pricing dictionaries and InnovativePricing class exactly as they were) ...
+
 DATABASE_PRICING = {
     "PostgreSQL": {
         "db.t3.micro": {"vCPU": 1, "Memory": 1, "Price": 0.017, "Storage": 0.115},
@@ -280,7 +373,6 @@ DATABASE_PRICING = {
     }
 }
 
-# Enhanced EBS Pricing with different volume types
 EBS_PRICING = {
     "gp3": {"price_per_gb": 0.08, "iops_price": 0.005, "throughput_price": 0.04},
     "gp2": {"price_per_gb": 0.10, "iops_price": 0.00, "throughput_price": 0.00},
@@ -354,34 +446,30 @@ class InnovativePricing:
         """Calculate price using innovative factors"""
         base_price = 0.0
         
-        # Enhanced usage pattern multipliers with more granularity
         pattern_multipliers = {
-            "development": 0.6,    # Development/testing workloads
-            "sporadic": 0.8,      # Irregular usage patterns
-            "normal": 1.0,        # Regular business hours usage
-            "intensive": 1.4,     # High-utilization workloads
-            "24x7": 1.8           # Always-on critical workloads
+            "development": 0.6,
+            "sporadic": 0.8,
+            "normal": 1.0,
+            "intensive": 1.4,
+            "24x7": 1.8
         }
         
-        # Time-based discounts with more options
         current_hour = datetime.now().hour
-        if 0 <= current_hour < 6:  # Night hours discount
+        if 0 <= current_hour < 6:
             time_multiplier = 0.7
-        elif 6 <= current_hour < 9 or 17 <= current_hour < 20:  # Peak hours premium
+        elif 6 <= current_hour < 9 or 17 <= current_hour < 20:
             time_multiplier = 1.2
         else:
             time_multiplier = 1.0
         
-        # Enhanced region-based adjustments
         region_multipliers = {
-            "us-east-1": 1.0,      # Virginia (cheapest)
-            "us-west-2": 1.08,     # Oregon
-            "eu-west-1": 1.15,     # Ireland
-            "ap-southeast-1": 1.25, # Singapore
-            "ap-northeast-1": 1.30  # Tokyo (most expensive)
+            "us-east-1": 1.0,
+            "us-west-2": 1.08,
+            "eu-west-1": 1.15,
+            "ap-southeast-1": 1.25,
+            "ap-northeast-1": 1.30
         }
         
-        # Calculate base price based on service and configuration
         if service == "Amazon EC2":
             instance_type = config.get('instance_type', 't3.micro')
             for family in INSTANCE_FAMILIES.values():
@@ -389,7 +477,6 @@ class InnovativePricing:
                     base_price = family[instance_type]['Price'] * 730
                     break
             
-            # Enhanced EBS pricing calculation
             storage_gb = config.get('storage_gb', 30)
             volume_type = config.get('volume_type', 'gp3')
             iops = config.get('iops', 3000) if volume_type in ['gp3', 'io1', 'io2'] else 0
@@ -413,7 +500,6 @@ class InnovativePricing:
                 storage_gb = config.get('storage_gb', 20)
                 base_price += storage_gb * storage_price
                 
-                # Additional RDS costs
                 if config.get('backup_retention', 0) > 0:
                     base_price += storage_gb * 0.095 * config.get('backup_retention', 0) / 30
                 
@@ -424,7 +510,6 @@ class InnovativePricing:
                     base_price *= 1.05
                     
         elif service == "Amazon EBS":
-            # Standalone EBS volume pricing
             storage_gb = config.get('storage_gb', 100)
             volume_type = config.get('volume_type', 'gp3')
             iops = config.get('iops', 3000) if volume_type in ['gp3', 'io1', 'io2'] else 0
@@ -436,7 +521,6 @@ class InnovativePricing:
                          iops * ebs_pricing['iops_price'] + 
                          throughput * ebs_pricing['throughput_price'])
             
-            # Snapshot cost (approx $0.05 per GB-month)
             base_price += snapshots * storage_gb * 0.05
             
         elif service == "Amazon S3":
@@ -521,7 +605,6 @@ class InnovativePricing:
                         base_price = instance_price * hours_per_month * instance_count
                         break
         
-        # Apply multipliers
         final_price = (
             base_price *
             pattern_multipliers.get(usage_pattern, 1.0) *
@@ -529,17 +612,15 @@ class InnovativePricing:
             region_multipliers.get(config.get('region', 'us-east-1'), 1.0)
         )
         
-        # Enhanced volume discounts with tiers
         if final_price > 10000:
-            final_price *= 0.75   # 25% discount for enterprise
+            final_price *= 0.75
         elif final_price > 5000:
-            final_price *= 0.80   # 20% discount for large business
+            final_price *= 0.80
         elif final_price > 1000:
-            final_price *= 0.85   # 15% discount for medium business
+            final_price *= 0.85
         elif final_price > 500:
-            final_price *= 0.90   # 10% discount for small business
+            final_price *= 0.90
             
-        # Commitment-based discounts
         if config.get('commitment', 'none') == '1-year':
             final_price *= 0.85
         elif config.get('commitment', 'none') == '3-year':
@@ -665,7 +746,6 @@ def render_service_configurator(service: str, key_prefix: str) -> Dict:
             throughput = st.number_input("Throughput (MB/s)", 125, 1000, 125, key=f"{key_prefix}_throughput")
             config["throughput"] = throughput
         
-        # Calculate estimated cost
         ebs_pricing = EBS_PRICING[volume_type]
         estimated_cost = storage_gb * ebs_pricing['price_per_gb']
         if 'iops' in config:
@@ -885,7 +965,6 @@ def render_service_configurator(service: str, key_prefix: str) -> Dict:
             "avg_tokens": tokens
         })
     
-    # Enhanced commitment options
     commitment = st.selectbox(
         "💎 Commitment Level",
         ["none", "1-year", "3-year"],
@@ -908,22 +987,22 @@ def main():
     # Inject custom CSS
     inject_custom_css()
     
-    # Main title with gradient
+    # Main title
     st.markdown("""
-    <div style='text-align: center; padding: 2rem 0;'>
-        <h1 style='font-size: 3rem; margin-bottom: 0.5rem;'>🚀 AWS Cloud Package Builder</h1>
-        <p style='font-size: 1.2rem; color: #718096;'>Design, Configure, and Optimize Your Cloud Architecture</p>
+    <div style='text-align: center; padding: 1rem 0;'>
+        <h1>🚀 AWS Cloud Package Builder</h1>
+        <p style='color: var(--text-light); font-size: 1.1rem;'>Design, Configure, and Optimize Your Cloud Architecture</p>
     </div>
     """, unsafe_allow_html=True)
     
     initialize_session_state()
     
-    # INNOVATIVE PROJECT REQUIREMENTS SECTION
+    # PROJECT REQUIREMENTS SECTION
     with st.expander("🎯 Project Requirements & Architecture", expanded=True):
         st.markdown("""
         <div class='custom-card'>
-            <h3>📋 Define Your Project Requirements</h3>
-            <p>Configure your workload profile, performance needs, and budget constraints</p>
+            <h3 style='color: var(--text); margin-bottom: 0.5rem;'>📋 Define Your Project Requirements</h3>
+            <p style='color: var(--text-light); margin: 0;'>Configure your workload profile, performance needs, and budget constraints</p>
         </div>
         """, unsafe_allow_html=True)
         
@@ -972,7 +1051,7 @@ def main():
             st.subheader("💰 Budget & Strategy")
             monthly_budget = st.number_input(
                 "Monthly Budget ($)", 
-                100, 1000000, 5000,
+                100, 1000000, 100,
                 key="monthly_budget"
             )
             
@@ -988,7 +1067,7 @@ def main():
                 key="usage_pattern"
             )
             
-        # Additional innovative requirements
+        # Additional requirements
         with st.expander("🔧 Advanced Requirements"):
             col1, col2 = st.columns(2)
             with col1:
@@ -1052,10 +1131,10 @@ def main():
                         "cost": cost
                     }
         
-        # Cost Summary with improved styling
+        # Cost Summary
         st.markdown("""
         <div class='custom-card'>
-            <h3>💰 Cost Summary & Recommendations</h3>
+            <h3 style='color: var(--text); margin-bottom: 1rem;'>💰 Cost Summary & Recommendations</h3>
         </div>
         """, unsafe_allow_html=True)
         
@@ -1068,7 +1147,7 @@ def main():
             budget_used = (st.session_state.total_cost / monthly_budget) * 100 if monthly_budget > 0 else 0
             st.metric("Budget Utilized", f"{budget_used:.1f}%")
         with col4:
-            savings_potential = st.session_state.total_cost * 0.15  # Estimate 15% savings potential
+            savings_potential = st.session_state.total_cost * 0.15
             st.metric("Savings Potential", f"${savings_potential:,.2f}")
         
         # Progress bar for budget utilization
@@ -1095,8 +1174,8 @@ def main():
         # Export configuration
         st.markdown("""
         <div class='custom-card'>
-            <h3>📥 Export Configuration</h3>
-            <p>Download your complete architecture configuration for future reference</p>
+            <h3 style='color: var(--text); margin-bottom: 0.5rem;'>📥 Export Configuration</h3>
+            <p style='color: var(--text-light); margin: 0;'>Download your complete architecture configuration for future reference</p>
         </div>
         """, unsafe_allow_html=True)
         
