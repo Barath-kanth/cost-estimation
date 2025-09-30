@@ -19,7 +19,7 @@ def inject_custom_css():
         --accent: #00A8E8;
         --background: #F7F9FC;
         --card-bg: #FFFFFF;
-        --text: #2D3748;
+        --text: #00000;
         --text-light: #718096;
         --success: #48BB78;
         --warning: #ED8936;
