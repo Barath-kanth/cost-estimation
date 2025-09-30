@@ -499,7 +499,7 @@ def render_service_configurator(service: str, key_prefix: str) -> Dict:
     )
     
     return config
-
+    
 # Update the main function to pass unique keys
 def main():
     # ... existing code ...
