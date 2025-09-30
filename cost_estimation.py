@@ -145,48 +145,49 @@ class InnovativePricing:
         elif service == "AWS Lambda":
             st.markdown("##### Lambda Function Configuration")
     
-        col1, col2, col3 = st.columns(3)
-        with col1:
-        memory_mb = st.selectbox(
-            "Memory (MB)",
-            [128, 256, 512, 1024, 2048, 3008, 4096, 5120, 6144, 7168, 8192, 9216, 10240],
-            index=0,  # Default to 128 MB
-            key=f"{key_prefix}_memory"
-        )
-        st.metric("Memory", f"{memory_mb} MB")
-    
-        with col2:
-        requests = st.number_input(
-            "Monthly Requests",
-            min_value=1000,
-            max_value=100000000,
-            value=1000000,
-            step=100000,
-            key=f"{key_prefix}_requests"
-        )
-        st.metric("Requests/Month", f"{requests:,}")
-    
-        with col3:
-        duration_ms = st.number_input(
-            "Average Duration (ms)",
-            min_value=100,
-            max_value=90000,  # Max 90 seconds (Lambda timeout limit)
-            value=1000,
-            step=100,
-            key=f"{key_prefix}_duration"
-        )
-        st.metric("Duration", f"{duration_ms} ms")
-    
-    # Calculate and display estimated cost
-        gb_seconds = (requests * duration_ms * memory_mb) / (1000 * 1024)
-        estimated_cost = (requests * 0.0000002) + (gb_seconds * 0.0000166667)
-        st.metric("Estimated Monthly Cost", f"${estimated_cost:,.2f}")
-    
-        config.update({
-            "memory_mb": memory_mb,
-            "requests_per_month": requests,
-            "avg_duration_ms": duration_ms
-        })
+            col1, col2, col3 = st.columns(3)
+            with col1:
+        
+                memory_mb = st.selectbox(
+                    "Memory (MB)",
+                    [128, 256, 512, 1024, 2048, 3008, 4096, 5120, 6144, 7168, 8192, 9216, 10240],
+                    index=0,  # Default to 128 MB
+                    key=f"{key_prefix}_memory"
+                )
+                st.metric("Memory", f"{memory_mb} MB")
+        
+            with col2:
+                requests = st.number_input(
+                    "Monthly Requests",
+                    min_value=1000,
+                    max_value=100000000,
+                    value=1000000,
+                    step=100000,
+                    key=f"{key_prefix}_requests"
+                )
+                st.metric("Requests/Month", f"{requests:,}")
+        
+            with col3:
+                duration_ms = st.number_input(
+                    "Average Duration (ms)",
+                    min_value=100,
+                    max_value=90000,  # Max 90 seconds (Lambda timeout limit)
+                    value=1000,
+                    step=100,
+                    key=f"{key_prefix}_duration"
+                )
+                st.metric("Duration", f"{duration_ms} ms")
+        
+        # Calculate and display estimated cost
+            gb_seconds = (requests * duration_ms * memory_mb) / (1000 * 1024)
+            estimated_cost = (requests * 0.0000002) + (gb_seconds * 0.0000166667)
+            st.metric("Estimated Monthly Cost", f"${estimated_cost:,.2f}")
+        
+            config.update({
+                "memory_mb": memory_mb,
+                "requests_per_month": requests,
+                "avg_duration_ms": duration_ms
+            })
 
         
     # Apply region multiplier for Lambda
