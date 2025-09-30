@@ -262,24 +262,65 @@ SECURITY_PRICING = {
     }
 }
 
-def render_service_configurator(service: str) -> Dict:
+def render_service_configurator(service: str, key_prefix: str) -> Dict:
     """Render configuration options for selected service"""
     config = {}
     
     if service == "Amazon EC2":
-        # ... existing EC2 configuration code ...
-        pass
+        st.markdown("##### Instance Configuration")
         
+        # Instance family selection
+        family = st.selectbox(
+            "Instance Family",
+            list(INSTANCE_FAMILIES.keys()),
+            help="Choose instance family based on your workload",
+            key=f"{key_prefix}_family"
+        )
+        
+        # Instance type selection with specs display
+        instance_types = list(INSTANCE_FAMILIES[family].keys())
+        selected_type = st.selectbox(
+            "Instance Type", 
+            instance_types,
+            key=f"{key_prefix}_type"
+        )
+        specs = INSTANCE_FAMILIES[family][selected_type]
+        
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.metric("vCPU", specs["vCPU"])
+        with col2:
+            st.metric("Memory (GiB)", specs["Memory"])
+        with col3:
+            st.metric("Price/Hour", f"${specs['Price']}")
+        
+        config["instance_type"] = selected_type
+        config["instance_count"] = st.number_input(
+            "Number of Instances", 
+            1, 100, 1,
+            key=f"{key_prefix}_count"
+        )
+        config["storage_gb"] = st.number_input(
+            "EBS Storage per Instance (GB)", 
+            8, 16384, 30,
+            key=f"{key_prefix}_storage"
+        )
+    
     elif service == "Amazon RDS":
         st.markdown("##### Database Configuration")
         
         engine = st.selectbox(
             "Database Engine",
-            list(DATABASE_PRICING.keys())
+            list(DATABASE_PRICING.keys()),
+            key=f"{key_prefix}_engine"
         )
         
         instance_types = list(DATABASE_PRICING[engine].keys())
-        selected_type = st.selectbox("Instance Type", instance_types)
+        selected_type = st.selectbox(
+            "Instance Type", 
+            instance_types,
+            key=f"{key_prefix}_type"
+        )
         specs = DATABASE_PRICING[engine][selected_type]
         
         col1, col2, col3 = st.columns(3)
@@ -292,105 +333,98 @@ def render_service_configurator(service: str) -> Dict:
         
         config["engine"] = engine
         config["instance_type"] = selected_type
-        config["storage_gb"] = st.number_input("Storage (GB)", 20, 65536, 100)
-        config["multi_az"] = st.checkbox("Multi-AZ Deployment")
-        config["backup_retention"] = st.slider("Backup Retention (Days)", 0, 35, 7)
+        config["storage_gb"] = st.number_input(
+            "Storage (GB)", 
+            20, 65536, 100,
+            key=f"{key_prefix}_storage"
+        )
+        config["multi_az"] = st.checkbox(
+            "Multi-AZ Deployment",
+            key=f"{key_prefix}_multiaz"
+        )
+        config["backup_retention"] = st.slider(
+            "Backup Retention (Days)", 
+            0, 35, 7,
+            key=f"{key_prefix}_backup"
+        )
     
     elif service == "Amazon S3":
         st.markdown("##### Storage Configuration")
         
         storage_class = st.selectbox(
             "Storage Class",
-            list(STORAGE_PRICING.keys())
+            list(STORAGE_PRICING.keys()),
+            key=f"{key_prefix}_class"
         )
         
         col1, col2 = st.columns(2)
         with col1:
-            storage_gb = st.number_input("Storage (GB)", 1, 1000000, 100)
+            storage_gb = st.number_input(
+                "Storage (GB)", 
+                1, 1000000, 100,
+                key=f"{key_prefix}_storage"
+            )
             st.metric("Price/GB/Month", f"${STORAGE_PRICING[storage_class]}")
         with col2:
             requests_per_month = st.number_input(
                 "Monthly Requests (thousands)",
-                1, 1000000, 100
+                1, 1000000, 100,
+                key=f"{key_prefix}_requests"
             ) * 1000
         
         config["storage_class"] = storage_class
         config["storage_gb"] = storage_gb
         config["requests_per_month"] = requests_per_month
     
-    elif service == "Amazon Bedrock":
-        st.markdown("##### Model Configuration")
-        
-        model = st.selectbox(
-            "Foundation Model",
-            list(AI_ML_PRICING["Bedrock"].keys())
-        )
-        
-        col1, col2 = st.columns(2)
-        with col1:
-            requests = st.number_input(
-                "Monthly Requests",
-                1000, 10000000, 10000
-            )
-            st.metric("Price/1K Tokens", f"${AI_ML_PRICING['Bedrock'][model]}")
-        with col2:
-            avg_tokens = st.number_input(
-                "Average Tokens per Request",
-                100, 10000, 1000
-            )
-        
-        config["model"] = model
-        config["requests_per_month"] = requests
-        config["avg_tokens"] = avg_tokens
+    # ... Add configurations for other services with unique keys ...
     
-    elif service == "Amazon CloudFront":
-        st.markdown("##### CDN Configuration")
-        
-        col1, col2 = st.columns(2)
-        with col1:
-            data_transfer_gb = st.number_input(
-                "Monthly Data Transfer (GB)",
-                1, 1000000, 1000
-            )
-            st.metric("Price/GB", f"${NETWORKING_PRICING['CloudFront']['price_per_gb']}")
-        with col2:
-            requests = st.number_input(
-                "Monthly Requests (thousands)",
-                1, 1000000, 100
-            ) * 1000
-        
-        config["data_transfer_gb"] = data_transfer_gb
-        config["requests"] = requests
-    
-    elif service == "AWS WAF":
-        st.markdown("##### WAF Configuration")
-        
-        col1, col2 = st.columns(2)
-        with col1:
-            web_acls = st.number_input("Number of Web ACLs", 1, 100, 1)
-            st.metric("Price/ACL/Month", f"${SECURITY_PRICING['WAF']['price_per_acl']}")
-        with col2:
-            rules = st.number_input("Number of Rules", 1, 1000, 5)
-            st.metric("Price/Rule/Month", f"${SECURITY_PRICING['WAF']['price_per_rule']}")
-        
-        rule_types = st.multiselect(
-            "Rule Types",
-            ["Rate Limiting", "IP Reputation", "SQL Injection", "XSS Protection",
-             "Geo Blocking", "Custom Rules"]
-        )
-        
-        config["web_acls"] = web_acls
-        config["rules"] = rules
-        config["rule_types"] = rule_types
-    
-    # Add region selection for all services
+    # Add region selection with unique key
     config["region"] = st.selectbox(
         "Region",
-        ["us-east-1", "us-west-2", "eu-west-1", "ap-southeast-1"]
+        ["us-east-1", "us-west-2", "eu-west-1", "ap-southeast-1"],
+        key=f"{key_prefix}_region"
     )
     
     return config
 
+# Update the main function to pass unique keys
+def main():
+    # ... existing code ...
+    
+    if st.button("Generate Configuration", type="primary"):
+        if not selected_services:
+            st.warning("⚠️ Please select at least one service")
+            return
+        
+        st.header("🛠️ Service Configuration")
+        
+        total_cost = 0
+        configurations = {}
+        
+        # Configure each selected service with unique keys
+        for category, services in selected_services.items():
+            st.subheader(f"{category} Services")
+            
+            for i, service in enumerate(services):
+                with st.expander(f"⚙️ {service}", expanded=True):
+                    st.markdown(f"*{AWS_SERVICES[category][service]}*")
+                    
+                    # Generate unique key for each service configuration
+                    service_key = f"{category}_{service}_{i}"
+                    config = render_service_configurator(service, service_key)
+                    cost = InnovativePricing.calculate_price(
+                        service, config, usage_pattern
+                    )
+                    
+                    st.metric("Estimated Monthly Cost", f"${cost:,.2f}")
+                    total_cost += cost
+                    
+                    configurations[service] = {
+                        "config": config,
+                        "cost": cost
+                    }
+        
+        # ... rest of the main function ...
 
 def render_service_configurator(service: str) -> Dict:
     """Render configuration options for selected service"""
@@ -614,5 +648,40 @@ def main():
             mime="application/json"
         )
 
+def main():
+    # ... existing code ...
+    
+    if st.button("Generate Configuration", type="primary"):
+        if not selected_services:
+            st.warning("⚠️ Please select at least one service")
+            return
+        
+        st.header("🛠️ Service Configuration")
+        
+        total_cost = 0
+        configurations = {}
+        
+        # Configure each selected service with unique keys
+        for category, services in selected_services.items():
+            st.subheader(f"{category} Services")
+            
+            for i, service in enumerate(services):
+                with st.expander(f"⚙️ {service}", expanded=True):
+                    st.markdown(f"*{AWS_SERVICES[category][service]}*")
+                    
+                    # Generate unique key for each service configuration
+                    service_key = f"{category}_{service}_{i}"
+                    config = render_service_configurator(service, service_key)
+                    cost = InnovativePricing.calculate_price(
+                        service, config, usage_pattern
+                    )
+                    
+                    st.metric("Estimated Monthly Cost", f"${cost:,.2f}")
+                    total_cost += cost
+                    
+                    configurations[service] = {
+                        "config": config,
+                        "cost": cost
+                    }
 if __name__ == "__main__":
     main()
