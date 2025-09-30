@@ -419,8 +419,8 @@ def render_service_configurator(service: str, key_prefix: str) -> Dict:
     })
 
         
-elif service == "Amazon EKS":
-    st.markdown("##### EKS Cluster Configuration")
+    elif service == "Amazon EKS":
+        st.markdown("##### EKS Cluster Configuration")
     
     # Cluster configuration
     col1, col2 = st.columns(2)
