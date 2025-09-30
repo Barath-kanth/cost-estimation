@@ -199,6 +199,7 @@ class InnovativePricing:
             # ECS pricing depends on launch type
             launch_type = config.get('launch_type', 'Fargate')
             tasks = config.get('tasks', 1)
+            hours_per_month = 730  # Default: 24*30.5 = 730 hours/month
             
             if launch_type == "Fargate":
                 vcpu = config.get('vcpu', 0.5)
@@ -206,7 +207,7 @@ class InnovativePricing:
                 
                 # Fargate pricing: $0.04048 per vCPU/hour + $0.004445 per GB/hour
                 price_per_hour = (vcpu * 0.04048) + (memory_gb * 0.004445)
-                base_price = price_per_hour * cluster_hours * tasks
+                base_price = price_per_hour * hours_per_month * tasks
                 
             elif launch_type == "EC2":
                 # EC2 launch type - use EC2 instance pricing
@@ -216,7 +217,7 @@ class InnovativePricing:
                 for family in INSTANCE_FAMILIES.values():
                     if instance_type in family:
                         instance_price = family[instance_type]['Price']
-                        base_price = instance_price * cluster_hours * instance_count
+                        base_price = instance_price * hours_per_month * instance_count
                         break
         
         # Apply multipliers
@@ -426,37 +427,69 @@ def render_service_configurator(service: str, key_prefix: str) -> Dict:
             ["Fargate", "EC2"],
             key=f"{key_prefix}_launch_type"
         )
-        col1, col2 = st.columns(2)
-        with col1:
-            vcpu = st.number_input("vCPU Units", 0.25, 4.0, 0.5, 0.25, key=f"{key_prefix}_vcpu")
-            st.metric("vCPU", vcpu)
-        with col2:
-            memory = st.number_input("Memory (GB)", 0.5, 30.0, 1.0, 0.5, key=f"{key_prefix}_memory")
-            st.metric("Memory (GB)", memory)
+        
+        # Common configuration for both launch types
         tasks = st.number_input("Number of Tasks", 1, 100, 1, key=f"{key_prefix}_tasks")
-        config.update({
-            "launch_type": launch_type,
-            "vcpu": vcpu,
-            "memory_gb": memory,
-            "tasks": tasks
-        })
-        # Calculate and display the price for ECS
+        
         if launch_type == "Fargate":
-            # Calculate price for Fargate
-            price_per_vcpu_hour = 0.04048  # Example price per vCPU per hour
-            price_per_gb_hour = 0.004445  # Example price per GB per hour
+            col1, col2 = st.columns(2)
+            with col1:
+                vcpu = st.number_input("vCPU Units", 0.25, 4.0, 0.5, 0.25, key=f"{key_prefix}_vcpu")
+                st.metric("vCPU", vcpu)
+            with col2:
+                memory = st.number_input("Memory (GB)", 0.5, 30.0, 1.0, 0.5, key=f"{key_prefix}_memory")
+                st.metric("Memory (GB)", memory)
+            
+            # Calculate Fargate pricing
+            price_per_vcpu_hour = 0.04048
+            price_per_gb_hour = 0.004445
             price_per_task_hour = (vcpu * price_per_vcpu_hour) + (memory * price_per_gb_hour)
-            price_per_task_month = price_per_task_hour * 24 * 30  # Assuming 30 days in a month
+            price_per_task_month = price_per_task_hour * 24 * 30
             total_price = price_per_task_month * tasks
             st.metric("Estimated Monthly Cost", f"${total_price:,.2f}")
+            
+            config.update({
+                "launch_type": launch_type,
+                "vcpu": vcpu,
+                "memory_gb": memory,
+                "tasks": tasks
+            })
+            
         elif launch_type == "EC2":
-            # Calculate price for EC2
-            price_per_vcpu_hour = 0.01  # Example price per vCPU per hour
-            price_per_gb_hour = 0.001  # Example price per GB per hour
-            price_per_task_hour = (vcpu * price_per_vcpu_hour) + (memory * price_per_gb_hour)
-            price_per_task_month = price_per_task_hour * 24 * 30  # Assuming 30 days in a month
-            total_price = price_per_task_month * tasks
+            # EC2-specific configuration
+            family = st.selectbox(
+                "Instance Family",
+                list(INSTANCE_FAMILIES.keys()),
+                key=f"{key_prefix}_ec2_family"
+            )
+            instance_types = list(INSTANCE_FAMILIES[family].keys())
+            instance_type = st.selectbox(
+                "Instance Type",
+                instance_types,
+                key=f"{key_prefix}_ec2_type"
+            )
+            instance_count = st.number_input("Number of Instances", 1, 20, 1, key=f"{key_prefix}_ec2_count")
+            
+            specs = INSTANCE_FAMILIES[family][instance_type]
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                st.metric("vCPU", specs["vCPU"])
+            with col2:
+                st.metric("Memory (GiB)", specs["Memory"])
+            with col3:
+                st.metric("Price/Hour", f"${specs['Price']}")
+            
+            # Calculate EC2 pricing
+            instance_price_per_month = specs['Price'] * 730  # Hours per month
+            total_price = instance_price_per_month * instance_count
             st.metric("Estimated Monthly Cost", f"${total_price:,.2f}")
+            
+            config.update({
+                "launch_type": launch_type,
+                "instance_type": instance_type,
+                "instance_count": instance_count,
+                "tasks": tasks
+            })
             
     elif service == "Amazon RDS":
         st.markdown("##### Database Configuration")
