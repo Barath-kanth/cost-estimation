@@ -520,7 +520,6 @@ def main():
         total_cost = 0
         configurations = {}
         
-        # Configure each selected service with unique keys
         for category, services in selected_services.items():
             st.subheader(f"{category} Services")
             
@@ -528,30 +527,17 @@ def main():
                 with st.expander(f"⚙️ {service}", expanded=True):
                     st.markdown(f"*{AWS_SERVICES[category][service]}*")
                     
-                    # Generate unique key for each service configuration
                     service_key = f"{category}_{service}_{i}"
-                    try:
-                        config = render_service_configurator(service, service_key)
-                        cost = InnovativePricing.calculate_price(
-                            service, 
-                            config, 
-                            usage_pattern
-                        )
-                        
-                        st.metric(
-                            "Estimated Monthly Cost", 
-                            f"${cost:,.2f}",
-                            key=f"{service_key}_cost"
-                        )
-                        total_cost += cost
-                        
-                        configurations[service] = {
-                            "config": config,
-                            "cost": cost
-                        }
-                    except Exception as e:
-                        st.error(f"Error configuring {service}: {str(e)}")
-                        continue
+                    config = render_service_configurator(service, service_key)
+                    cost = InnovativePricing.calculate_price(service, config, usage_pattern)
+                    
+                    st.metric("Estimated Monthly Cost", f"${cost:,.2f}")  # Removed key parameter
+                    total_cost += cost
+                    
+                    configurations[service] = {
+                        "config": config,
+                        "cost": cost
+                    }
         
         # Cost Summary
         st.header("💰 Cost Summary")
