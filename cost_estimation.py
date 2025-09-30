@@ -8,7 +8,7 @@ import pandas as pd
 from concurrent.futures import ThreadPoolExecutor
 import time
 
-# Custom CSS for TwinCoreTech color scheme
+# Custom CSS for TwinCoreTech color scheme with proper text visibility
 def inject_custom_css():
     st.markdown("""
     <style>
@@ -28,20 +28,24 @@ def inject_custom_css():
         --error: #ef4444;       /* Error red */
     }
     
+    /* Main app styling */
     .main {
         background-color: var(--background);
     }
     
     .stApp {
         background-color: var(--background);
-        color: var(--text);
     }
     
-    /* Headers with TwinCoreTech styling */
+    /* Fix ALL text colors - this is the most important fix */
+    * {
+        color: var(--text) !important;
+    }
+    
+    /* Headers */
     h1, h2, h3, h4, h5, h6 {
         color: var(--text) !important;
         font-weight: 600 !important;
-        font-family: 'Inter', sans-serif !important;
     }
     
     h1 {
@@ -49,6 +53,11 @@ def inject_custom_css():
         border-bottom: 3px solid var(--primary);
         padding-bottom: 0.5rem;
         margin-bottom: 2rem !important;
+    }
+    
+    /* Paragraphs and general text */
+    p, span, div {
+        color: var(--text) !important;
     }
     
     /* Cards and containers */
@@ -63,7 +72,7 @@ def inject_custom_css():
         background-color: var(--card-bg) !important;
     }
     
-    /* Buttons - TwinCoreTech blue */
+    /* Buttons */
     .stButton > button {
         background-color: var(--primary) !important;
         color: white !important;
@@ -80,7 +89,7 @@ def inject_custom_css():
         box-shadow: 0 4px 6px -1px rgba(37, 99, 235, 0.3) !important;
     }
     
-    /* Metrics - TwinCoreTech styling */
+    /* Metrics */
     [data-testid="stMetricValue"] {
         color: var(--primary) !important;
         font-weight: 700 !important;
@@ -92,7 +101,7 @@ def inject_custom_css():
         font-weight: 500 !important;
     }
     
-    /* Tabs - TwinCoreTech styling */
+    /* Tabs */
     .stTabs [data-baseweb="tab-list"] {
         gap: 4px;
         background-color: var(--card-bg);
@@ -111,6 +120,14 @@ def inject_custom_css():
     .stTabs [aria-selected="true"] {
         background-color: var(--primary) !important;
         color: white !important;
+    }
+    
+    /* Form elements - ensure labels are visible */
+    .stCheckbox label, .stSelectbox label, .stNumberInput label, 
+    .stTextInput label, .stRadio label, .stSlider label,
+    .stMultiselect label {
+        color: var(--text) !important;
+        font-weight: 500 !important;
     }
     
     /* Checkboxes */
@@ -158,6 +175,11 @@ def inject_custom_css():
         border-color: var(--primary) !important;
     }
     
+    /* Select slider */
+    .stSelectSlider label {
+        color: var(--text) !important;
+    }
+    
     /* Success/Warning/Error messages */
     .stAlert {
         border-radius: 8px !important;
@@ -192,59 +214,66 @@ def inject_custom_css():
         margin-bottom: 1rem;
     }
     
+    .custom-card h3, .custom-card p {
+        color: var(--text) !important;
+        margin: 0;
+    }
+    
+    .custom-card h3 {
+        margin-bottom: 0.5rem !important;
+    }
+    
     /* Progress bar */
     .stProgress > div > div > div {
         background-color: var(--primary) !important;
     }
     
-    /* Fix text colors throughout the app */
-    .stMarkdown {
-        color: var(--text) !important;
-    }
-    
-    .stCheckbox label {
-        color: var(--text) !important;
-    }
-    
-    .stSelectbox label {
-        color: var(--text) !important;
-    }
-    
-    .stNumberInput label {
-        color: var(--text) !important;
-    }
-    
-    .stTextInput label {
-        color: var(--text) !important;
-    }
-    
-    .stRadio label {
-        color: var(--text) !important;
-    }
-    
-    .stSlider label {
-        color: var(--text) !important;
-    }
-    
-    /* Expander header */
+    /* Expander header - fix text color */
     .streamlit-expanderHeader {
         color: var(--text) !important;
         font-weight: 600 !important;
     }
     
-    /* Fix any white text issues */
-    div[data-testid="stExpander"] div[class*="header"] {
+    /* Fix help text */
+    [data-testid="stHelp"] {
+        color: var(--text-light) !important;
+    }
+    
+    /* Ensure all Streamlit text elements are visible */
+    .stMarkdown, .stMarkdown p, .stMarkdown span {
         color: var(--text) !important;
     }
     
-    /* Ensure all text is visible */
-    p, span, div {
+    /* Fix selectbox options */
+    [data-baseweb="popover"] {
         color: var(--text) !important;
     }
     
-    /* Select slider styling */
+    /* Fix multiselect */
+    .stMultiSelect [data-baseweb="tag"] {
+        background-color: var(--primary) !important;
+        color: white !important;
+    }
+    
+    /* Make sure all widget values are visible */
+    [data-baseweb="select"] div {
+        color: var(--text) !important;
+    }
+    
+    /* Fix the select slider text */
     [data-testid="stStyledFullScreenFrame"] {
         background-color: var(--background) !important;
+    }
+    
+    /* Specific fix for select slider labels */
+    div[data-testid="stSelectSlider"] label {
+        color: var(--text) !important;
+        font-weight: 500 !important;
+    }
+    
+    /* Fix for any remaining invisible text */
+    .st-bh, .st-bj, .st-bk, .st-bl, .st-bm, .st-bn {
+        color: var(--text) !important;
     }
     </style>
     """, unsafe_allow_html=True)
@@ -298,8 +327,8 @@ class ServiceSelector:
         """Render service selection UI and return selected services"""
         st.markdown("""
         <div class='custom-card'>
-            <h3 style='color: var(--text); margin-bottom: 0.5rem;'>🎯 Select AWS Services</h3>
-            <p style='color: var(--text-light); margin: 0;'>Choose the services that best fit your architecture needs</p>
+            <h3>🎯 Select AWS Services</h3>
+            <p>Choose the services that best fit your architecture needs</p>
         </div>
         """, unsafe_allow_html=True)
         
@@ -325,7 +354,7 @@ class ServiceSelector:
         
         return selected_services
 
-# ... (keep all the existing pricing dictionaries and classes the same) ...
+# ... (keep all the existing pricing dictionaries and classes exactly as they were) ...
 
 INSTANCE_FAMILIES = {
     "General Purpose": {
@@ -346,8 +375,6 @@ INSTANCE_FAMILIES = {
         "r5.2xlarge": {"vCPU": 8, "Memory": 64, "Price": 0.504}
     }
 }
-
-# ... (keep all the existing pricing dictionaries and InnovativePricing class exactly as they were) ...
 
 DATABASE_PRICING = {
     "PostgreSQL": {
@@ -1001,8 +1028,8 @@ def main():
     with st.expander("🎯 Project Requirements & Architecture", expanded=True):
         st.markdown("""
         <div class='custom-card'>
-            <h3 style='color: var(--text); margin-bottom: 0.5rem;'>📋 Define Your Project Requirements</h3>
-            <p style='color: var(--text-light); margin: 0;'>Configure your workload profile, performance needs, and budget constraints</p>
+            <h3>📋 Define Your Project Requirements</h3>
+            <p>Configure your workload profile, performance needs, and budget constraints</p>
         </div>
         """, unsafe_allow_html=True)
         
@@ -1134,7 +1161,7 @@ def main():
         # Cost Summary
         st.markdown("""
         <div class='custom-card'>
-            <h3 style='color: var(--text); margin-bottom: 1rem;'>💰 Cost Summary & Recommendations</h3>
+            <h3>💰 Cost Summary & Recommendations</h3>
         </div>
         """, unsafe_allow_html=True)
         
@@ -1174,8 +1201,8 @@ def main():
         # Export configuration
         st.markdown("""
         <div class='custom-card'>
-            <h3 style='color: var(--text); margin-bottom: 0.5rem;'>📥 Export Configuration</h3>
-            <p style='color: var(--text-light); margin: 0;'>Download your complete architecture configuration for future reference</p>
+            <h3>📥 Export Configuration</h3>
+            <p>Download your complete architecture configuration for future reference</p>
         </div>
         """, unsafe_allow_html=True)
         
