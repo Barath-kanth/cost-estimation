@@ -99,19 +99,39 @@ INSTANCE_FAMILIES = {
     }
 }
 
+# Enhanced RDS Pricing with more engines and options
 DATABASE_PRICING = {
     "PostgreSQL": {
-        "db.t3.micro": {"vCPU": 1, "Memory": 1, "Price": 0.017},
-        "db.t3.small": {"vCPU": 2, "Memory": 2, "Price": 0.034},
-        "db.t3.medium": {"vCPU": 2, "Memory": 4, "Price": 0.068},
-        "db.r5.large": {"vCPU": 2, "Memory": 16, "Price": 0.24}
+        "db.t3.micro": {"vCPU": 1, "Memory": 1, "Price": 0.017, "Storage": 0.115},
+        "db.t3.small": {"vCPU": 2, "Memory": 2, "Price": 0.034, "Storage": 0.115},
+        "db.t3.medium": {"vCPU": 2, "Memory": 4, "Price": 0.068, "Storage": 0.115},
+        "db.r5.large": {"vCPU": 2, "Memory": 16, "Price": 0.24, "Storage": 0.115},
+        "db.m5.large": {"vCPU": 2, "Memory": 8, "Price": 0.17, "Storage": 0.115}
     },
     "MySQL": {
-        "db.t3.micro": {"vCPU": 1, "Memory": 1, "Price": 0.017},
-        "db.t3.small": {"vCPU": 2, "Memory": 2, "Price": 0.034},
-        "db.t3.medium": {"vCPU": 2, "Memory": 4, "Price": 0.068},
-        "db.r5.large": {"vCPU": 2, "Memory": 16, "Price": 0.24}
+        "db.t3.micro": {"vCPU": 1, "Memory": 1, "Price": 0.017, "Storage": 0.115},
+        "db.t3.small": {"vCPU": 2, "Memory": 2, "Price": 0.034, "Storage": 0.115},
+        "db.t3.medium": {"vCPU": 2, "Memory": 4, "Price": 0.068, "Storage": 0.115},
+        "db.r5.large": {"vCPU": 2, "Memory": 16, "Price": 0.24, "Storage": 0.115}
+    },
+    "Aurora MySQL": {
+        "db.r5.large": {"vCPU": 2, "Memory": 16, "Price": 0.29, "Storage": 0.10},
+        "db.r5.xlarge": {"vCPU": 4, "Memory": 32, "Price": 0.58, "Storage": 0.10}
+    },
+    "SQL Server": {
+        "db.t3.small": {"vCPU": 2, "Memory": 2, "Price": 0.075, "Storage": 0.115},
+        "db.m5.large": {"vCPU": 2, "Memory": 8, "Price": 0.315, "Storage": 0.115}
     }
+}
+
+# Enhanced EBS Pricing with different volume types
+EBS_PRICING = {
+    "gp3": {"price_per_gb": 0.08, "iops_price": 0.005, "throughput_price": 0.04},
+    "gp2": {"price_per_gb": 0.10, "iops_price": 0.00, "throughput_price": 0.00},
+    "io1": {"price_per_gb": 0.125, "iops_price": 0.065, "throughput_price": 0.00},
+    "io2": {"price_per_gb": 0.125, "iops_price": 0.065, "throughput_price": 0.00},
+    "st1": {"price_per_gb": 0.045, "iops_price": 0.00, "throughput_price": 0.00},
+    "sc1": {"price_per_gb": 0.015, "iops_price": 0.00, "throughput_price": 0.00}
 }
 
 STORAGE_PRICING = {
@@ -178,22 +198,34 @@ class InnovativePricing:
         """Calculate price using innovative factors"""
         base_price = 0.0
         
+        # Enhanced usage pattern multipliers with more granularity
         pattern_multipliers = {
-            "sporadic": 0.7,
-            "normal": 1.0,
-            "intensive": 1.3
+            "development": 0.6,    # Development/testing workloads
+            "sporadic": 0.8,      # Irregular usage patterns
+            "normal": 1.0,        # Regular business hours usage
+            "intensive": 1.4,     # High-utilization workloads
+            "24x7": 1.8           # Always-on critical workloads
         }
         
+        # Time-based discounts with more options
         current_hour = datetime.now().hour
-        time_multiplier = 0.8 if 0 <= current_hour < 6 else 1.0
+        if 0 <= current_hour < 6:  # Night hours discount
+            time_multiplier = 0.7
+        elif 6 <= current_hour < 9 or 17 <= current_hour < 20:  # Peak hours premium
+            time_multiplier = 1.2
+        else:
+            time_multiplier = 1.0
         
+        # Enhanced region-based adjustments
         region_multipliers = {
-            "us-east-1": 1.0,
-            "us-west-2": 1.05,
-            "eu-west-1": 1.1,
-            "ap-southeast-1": 1.15
+            "us-east-1": 1.0,      # Virginia (cheapest)
+            "us-west-2": 1.08,     # Oregon
+            "eu-west-1": 1.15,     # Ireland
+            "ap-southeast-1": 1.25, # Singapore
+            "ap-northeast-1": 1.30  # Tokyo (most expensive)
         }
         
+        # Calculate base price based on service and configuration
         if service == "Amazon EC2":
             instance_type = config.get('instance_type', 't3.micro')
             for family in INSTANCE_FAMILIES.values():
@@ -201,28 +233,65 @@ class InnovativePricing:
                     base_price = family[instance_type]['Price'] * 730
                     break
             
+            # Enhanced EBS pricing calculation
             storage_gb = config.get('storage_gb', 30)
-            storage_cost = storage_gb * 0.10
+            volume_type = config.get('volume_type', 'gp3')
+            iops = config.get('iops', 3000) if volume_type in ['gp3', 'io1', 'io2'] else 0
+            throughput = config.get('throughput', 125) if volume_type == 'gp3' else 0
+            
+            ebs_pricing = EBS_PRICING.get(volume_type, EBS_PRICING['gp3'])
+            storage_cost = (storage_gb * ebs_pricing['price_per_gb'] + 
+                          iops * ebs_pricing['iops_price'] + 
+                          throughput * ebs_pricing['throughput_price'])
+            
             base_price = (base_price * config.get('instance_count', 1)) + storage_cost
             
         elif service == "Amazon RDS":
             instance_type = config.get('instance_type')
             engine = config.get('engine')
             if engine in DATABASE_PRICING and instance_type in DATABASE_PRICING[engine]:
-                base_price = DATABASE_PRICING[engine][instance_type]['Price'] * 730
+                instance_price = DATABASE_PRICING[engine][instance_type]['Price']
+                storage_price = DATABASE_PRICING[engine][instance_type]['Storage']
+                base_price = instance_price * 730
                 
-            storage_gb = config.get('storage_gb', 20)
-            base_price += storage_gb * 0.115
+                storage_gb = config.get('storage_gb', 20)
+                base_price += storage_gb * storage_price
+                
+                # Additional RDS costs
+                if config.get('backup_retention', 0) > 0:
+                    base_price += storage_gb * 0.095 * config.get('backup_retention', 0) / 30
+                
+                if config.get('multi_az', False):
+                    base_price *= 2
+                
+                if config.get('encryption', False):
+                    base_price *= 1.05
+                    
+        elif service == "Amazon EBS":
+            # Standalone EBS volume pricing
+            storage_gb = config.get('storage_gb', 100)
+            volume_type = config.get('volume_type', 'gp3')
+            iops = config.get('iops', 3000) if volume_type in ['gp3', 'io1', 'io2'] else 0
+            throughput = config.get('throughput', 125) if volume_type == 'gp3' else 0
+            snapshots = config.get('monthly_snapshots', 0)
             
-            if config.get('multi_az', False):
-                base_price *= 2
+            ebs_pricing = EBS_PRICING.get(volume_type, EBS_PRICING['gp3'])
+            base_price = (storage_gb * ebs_pricing['price_per_gb'] + 
+                         iops * ebs_pricing['iops_price'] + 
+                         throughput * ebs_pricing['throughput_price'])
+            
+            # Snapshot cost (approx $0.05 per GB-month)
+            base_price += snapshots * storage_gb * 0.05
             
         elif service == "Amazon S3":
             storage_class = config.get('storage_class', 'Standard')
             storage_gb = config.get('storage_gb', 100)
             requests = config.get('requests_per_month', 100000)
+            data_transfer = config.get('data_transfer_gb', 0)
             
-            base_price = (storage_gb * STORAGE_PRICING[storage_class]) + (requests / 1000 * 0.0004)
+            base_price = (storage_gb * STORAGE_PRICING[storage_class] + 
+                         (requests / 1000 * 0.0004) +
+                         (data_transfer * 0.09))
             
         elif service == "AWS Lambda":
             memory_mb = config.get('memory_mb', 128)
@@ -249,9 +318,11 @@ class InnovativePricing:
         elif service == "AWS WAF":
             acls = config.get('web_acls', 1)
             rules = config.get('rules', 5)
+            requests = config.get('requests_million', 1)
             
             base_price = (acls * SECURITY_PRICING['WAF']['price_per_acl'] +
-                         rules * SECURITY_PRICING['WAF']['price_per_rule'])
+                         rules * SECURITY_PRICING['WAF']['price_per_rule'] +
+                         requests * SECURITY_PRICING['WAF']['price_per_request_million'])
             
         elif service == "Amazon EKS":
             cluster_hours = config.get('cluster_hours', 730)
@@ -294,6 +365,7 @@ class InnovativePricing:
                         base_price = instance_price * hours_per_month * instance_count
                         break
         
+        # Apply multipliers
         final_price = (
             base_price *
             pattern_multipliers.get(usage_pattern, 1.0) *
@@ -301,10 +373,21 @@ class InnovativePricing:
             region_multipliers.get(config.get('region', 'us-east-1'), 1.0)
         )
         
-        if final_price > 1000:
-            final_price *= 0.9
-        if final_price > 5000:
+        # Enhanced volume discounts with tiers
+        if final_price > 10000:
+            final_price *= 0.75   # 25% discount for enterprise
+        elif final_price > 5000:
+            final_price *= 0.80   # 20% discount for large business
+        elif final_price > 1000:
+            final_price *= 0.85   # 15% discount for medium business
+        elif final_price > 500:
+            final_price *= 0.90   # 10% discount for small business
+            
+        # Commitment-based discounts
+        if config.get('commitment', 'none') == '1-year':
             final_price *= 0.85
+        elif config.get('commitment', 'none') == '3-year':
+            final_price *= 0.70
             
         return final_price
 
@@ -334,10 +417,113 @@ def render_service_configurator(service: str, key_prefix: str) -> Dict:
             st.metric("Memory (GiB)", specs["Memory"])
         with col3:
             st.metric("Price/Hour", f"${specs['Price']}")
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            instance_count = st.number_input("Number of Instances", 1, 100, 1, key=f"{key_prefix}_count")
+        with col2:
+            volume_type = st.selectbox(
+                "EBS Volume Type",
+                list(EBS_PRICING.keys()),
+                key=f"{key_prefix}_volume_type"
+            )
+        
+        storage_gb = st.number_input("EBS Storage (GB)", 8, 16384, 30, key=f"{key_prefix}_storage")
+        
+        if volume_type in ['gp3', 'io1', 'io2']:
+            iops = st.number_input("IOPS", 100, 64000, 3000, key=f"{key_prefix}_iops")
+            config["iops"] = iops
+        
+        if volume_type == 'gp3':
+            throughput = st.number_input("Throughput (MB/s)", 125, 1000, 125, key=f"{key_prefix}_throughput")
+            config["throughput"] = throughput
+        
         config.update({
             "instance_type": selected_type,
-            "instance_count": st.number_input("Number of Instances", 1, 100, 1, key=f"{key_prefix}_count"),
-            "storage_gb": st.number_input("EBS Storage (GB)", 8, 16384, 30, key=f"{key_prefix}_storage")
+            "instance_count": instance_count,
+            "storage_gb": storage_gb,
+            "volume_type": volume_type
+        })
+        
+    elif service == "Amazon RDS":
+        st.markdown("##### Database Configuration")
+        engine = st.selectbox(
+            "Database Engine",
+            list(DATABASE_PRICING.keys()),
+            key=f"{key_prefix}_engine"
+        )
+        instance_types = list(DATABASE_PRICING[engine].keys())
+        selected_type = st.selectbox(
+            "Instance Type",
+            instance_types,
+            key=f"{key_prefix}_type"
+        )
+        specs = DATABASE_PRICING[engine][selected_type]
+        
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.metric("vCPU", specs["vCPU"])
+        with col2:
+            st.metric("Memory (GiB)", specs["Memory"])
+        with col3:
+            st.metric("Price/Hour", f"${specs['Price']}")
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            storage = st.number_input("Storage (GB)", 20, 65536, 100, key=f"{key_prefix}_storage")
+            backup_retention = st.number_input("Backup Retention (Days)", 0, 35, 7, key=f"{key_prefix}_backup")
+        with col2:
+            multi_az = st.checkbox("Multi-AZ Deployment", key=f"{key_prefix}_multiaz")
+            encryption = st.checkbox("Encryption at Rest", value=True, key=f"{key_prefix}_encryption")
+        
+        config.update({
+            "engine": engine,
+            "instance_type": selected_type,
+            "storage_gb": storage,
+            "multi_az": multi_az,
+            "backup_retention": backup_retention,
+            "encryption": encryption
+        })
+        
+    elif service == "Amazon EBS":
+        st.markdown("##### EBS Volume Configuration")
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            volume_type = st.selectbox(
+                "Volume Type",
+                list(EBS_PRICING.keys()),
+                help="gp3: General Purpose, io1/io2: Provisioned IOPS, st1: Throughput Optimized, sc1: Cold",
+                key=f"{key_prefix}_volume_type"
+            )
+            storage_gb = st.number_input("Storage Size (GB)", 1, 16384, 100, key=f"{key_prefix}_storage")
+        with col2:
+            monthly_snapshots = st.number_input("Monthly Snapshots", 0, 30, 4, key=f"{key_prefix}_snapshots")
+            st.metric("Price/GB/Month", f"${EBS_PRICING[volume_type]['price_per_gb']}")
+        
+        if volume_type in ['gp3', 'io1', 'io2']:
+            iops = st.number_input("Provisioned IOPS", 100, 64000, 3000, key=f"{key_prefix}_iops")
+            config["iops"] = iops
+        
+        if volume_type == 'gp3':
+            throughput = st.number_input("Throughput (MB/s)", 125, 1000, 125, key=f"{key_prefix}_throughput")
+            config["throughput"] = throughput
+        
+        # Calculate estimated cost
+        ebs_pricing = EBS_PRICING[volume_type]
+        estimated_cost = storage_gb * ebs_pricing['price_per_gb']
+        if 'iops' in config:
+            estimated_cost += config['iops'] * ebs_pricing['iops_price']
+        if 'throughput' in config:
+            estimated_cost += config['throughput'] * ebs_pricing['throughput_price']
+        estimated_cost += monthly_snapshots * storage_gb * 0.05
+        
+        st.metric("Estimated Monthly Cost", f"${estimated_cost:,.2f}")
+        
+        config.update({
+            "volume_type": volume_type,
+            "storage_gb": storage_gb,
+            "monthly_snapshots": monthly_snapshots
         })
         
     elif service == "AWS Lambda":
@@ -503,34 +689,6 @@ def render_service_configurator(service: str, key_prefix: str) -> Dict:
                 "tasks": tasks
             })
             
-    elif service == "Amazon RDS":
-        st.markdown("##### Database Configuration")
-        engine = st.selectbox(
-            "Database Engine",
-            list(DATABASE_PRICING.keys()),
-            key=f"{key_prefix}_engine"
-        )
-        instance_types = list(DATABASE_PRICING[engine].keys())
-        selected_type = st.selectbox(
-            "Instance Type",
-            instance_types,
-            key=f"{key_prefix}_type"
-        )
-        specs = DATABASE_PRICING[engine][selected_type]
-        col1, col2 = st.columns(2)
-        with col1:
-            st.metric("vCPU", specs["vCPU"])
-            storage = st.number_input("Storage (GB)", 20, 65536, 100, key=f"{key_prefix}_storage")
-        with col2:
-            st.metric("Memory (GiB)", specs["Memory"])
-            multi_az = st.checkbox("Multi-AZ Deployment", key=f"{key_prefix}_multiaz")
-        config.update({
-            "engine": engine,
-            "instance_type": selected_type,
-            "storage_gb": storage,
-            "multi_az": multi_az
-        })
-        
     elif service == "Amazon S3":
         st.markdown("##### Storage Configuration")
         storage_class = st.selectbox(
@@ -542,9 +700,14 @@ def render_service_configurator(service: str, key_prefix: str) -> Dict:
         with col1:
             storage = st.number_input("Storage (GB)", 1, 1000000, 100, key=f"{key_prefix}_storage")
             st.metric("Price/GB/Month", f"${STORAGE_PRICING[storage_class]}")
+        with col2:
+            requests = st.number_input("Monthly Requests (1000s)", 1, 100000, 100, key=f"{key_prefix}_requests")
+            data_transfer = st.number_input("Data Transfer Out (GB)", 0, 100000, 0, key=f"{key_prefix}_transfer")
         config.update({
             "storage_class": storage_class,
-            "storage_gb": storage
+            "storage_gb": storage,
+            "requests_per_month": requests * 1000,
+            "data_transfer_gb": data_transfer
         })
         
     elif service == "Amazon Bedrock":
@@ -566,9 +729,18 @@ def render_service_configurator(service: str, key_prefix: str) -> Dict:
             "avg_tokens": tokens
         })
     
+    # Enhanced commitment options
+    commitment = st.selectbox(
+        "Commitment Level",
+        ["none", "1-year", "3-year"],
+        help="Savings Plans/Reserved Instances commitment",
+        key=f"{key_prefix}_commitment"
+    )
+    config["commitment"] = commitment
+    
     config["region"] = st.selectbox(
         "Region",
-        ["us-east-1", "us-west-2", "eu-west-1", "ap-southeast-1"],
+        ["us-east-1", "us-west-2", "eu-west-1", "ap-northeast-1", "ap-southeast-1"],
         key=f"{key_prefix}_region"
     )
     
@@ -580,42 +752,95 @@ def main():
     
     initialize_session_state()
     
-    with st.expander("📋 Project Requirements", expanded=True):
-        col1, col2 = st.columns(2)
+    # INNOVATIVE PROJECT REQUIREMENTS SECTION
+    with st.expander("🎯 Project Requirements & Architecture", expanded=True):
+        col1, col2, col3 = st.columns(3)
+        
         with col1:
-            workload_type = st.selectbox(
-                "Workload Type",
-                ["Web Application", "Data Processing", "Machine Learning", 
-                 "Microservices", "Serverless", "Container-based"],
-                key="workload_type"
+            st.subheader("📊 Workload Profile")
+            workload_complexity = st.select_slider(
+                "Workload Complexity",
+                options=["Simple", "Moderate", "Complex", "Enterprise"],
+                value="Moderate",
+                help="Complexity of your application architecture"
             )
+            
+            availability_requirements = st.selectbox(
+                "Availability Requirements",
+                ["99.9% (Business Hours)", "99.95% (High Availability)", "99.99% (Mission Critical)"],
+                help="Required uptime SLA"
+            )
+            
+            data_classification = st.selectbox(
+                "Data Classification",
+                ["Public", "Internal", "Confidential", "Restricted"],
+                help="Security requirements based on data sensitivity"
+            )
+            
+        with col2:
+            st.subheader("⚡ Performance Needs")
+            performance_tier = st.select_slider(
+                "Performance Tier",
+                options=["Development", "Testing", "Production", "Enterprise"],
+                value="Production"
+            )
+            
+            response_time = st.selectbox(
+                "Response Time Requirements",
+                ["Standard (>1s)", "Fast (<1s)", "Real-time (<100ms)", "Ultra-fast (<10ms)"]
+            )
+            
+            scalability_needs = st.selectbox(
+                "Scalability Pattern",
+                ["Fixed Capacity", "Seasonal", "Predictable Growth", "Unpredictable Burst"]
+            )
+            
+        with col3:
+            st.subheader("💰 Budget & Strategy")
             monthly_budget = st.number_input(
                 "Monthly Budget ($)", 
                 100, 1000000, 5000,
                 key="monthly_budget"
             )
-            performance_tier = st.selectbox(
-                "Performance Tier", 
-                ["Development", "Production", "Enterprise"],
-                key="performance_tier"
+            
+            cost_strategy = st.selectbox(
+                "Cost Optimization Strategy",
+                ["Cost-Conscious", "Balanced", "Performance-First", "Enterprise-Optimized"]
             )
-        with col2:
+            
             usage_pattern = st.selectbox(
                 "Usage Pattern",
-                ["sporadic", "normal", "intensive"],
+                ["development", "sporadic", "normal", "intensive", "24x7"],
                 help="How will the services be used?",
                 key="usage_pattern"
             )
-            data_volume_gb = st.number_input(
-                "Data Volume (GB)", 
-                1, 100000, 100,
-                key="data_volume"
-            )
-            expected_users = st.number_input(
-                "Expected Users", 
-                1, 1000000, 1000,
-                key="expected_users"
-            )
+            
+        # Additional innovative requirements
+        with st.expander("🔧 Advanced Requirements"):
+            col1, col2 = st.columns(2)
+            with col1:
+                compliance_requirements = st.multiselect(
+                    "Compliance Requirements",
+                    ["HIPAA", "PCI-DSS", "SOC2", "GDPR", "ISO27001", "None"]
+                )
+                
+                disaster_recovery = st.selectbox(
+                    "Disaster Recovery RTO/RPO",
+                    ["Basic (24h/24h)", "Standard (12h/12h)", "Advanced (4h/4h)", "Mission Critical (1h/15m)"]
+                )
+                
+            with col2:
+                data_volume_gb = st.number_input(
+                    "Estimated Data Volume (GB/Month)", 
+                    1, 1000000, 100,
+                    key="data_volume"
+                )
+                
+                expected_users = st.number_input(
+                    "Expected Concurrent Users", 
+                    1, 1000000, 1000,
+                    key="expected_users"
+                )
     
     st.session_state.selected_services = ServiceSelector.render_service_selection()
     
@@ -654,8 +879,8 @@ def main():
                         "cost": cost
                     }
         
-        st.header("💰 Cost Summary")
-        col1, col2, col3 = st.columns(3)
+        st.header("💰 Cost Summary & Recommendations")
+        col1, col2, col3, col4 = st.columns(4)
         with col1:
             st.metric("Total Monthly Cost", f"${st.session_state.total_cost:,.2f}")
         with col2:
@@ -663,21 +888,45 @@ def main():
         with col3:
             budget_used = (st.session_state.total_cost / monthly_budget) * 100
             st.metric("Budget Utilized", f"{budget_used:.1f}%")
+        with col4:
+            savings_potential = st.session_state.total_cost * 0.15  # Estimate 15% savings potential
+            st.metric("Savings Potential", f"${savings_potential:,.2f}")
+        
+        # Cost optimization recommendations
+        with st.expander("💡 Cost Optimization Recommendations"):
+            if st.session_state.total_cost > monthly_budget:
+                st.warning("⚠️ Your estimated costs exceed your budget. Consider:")
+                st.write("• Right-size instances based on actual usage patterns")
+                st.write("• Implement auto-scaling for variable workloads")
+                st.write("• Use Savings Plans for committed usage")
+                st.write("• Consider spot instances for fault-tolerant workloads")
+            else:
+                st.success("✅ Your architecture is within budget! Suggestions:")
+                st.write("• Implement monitoring for cost optimization")
+                st.write("• Consider Reserved Instances for stable workloads")
+                st.write("• Review storage lifecycle policies")
         
         st.download_button(
             "📥 Export Configuration",
             data=json.dumps({
                 "requirements": {
-                    "workload_type": workload_type,
-                    "monthly_budget": monthly_budget,
+                    "workload_complexity": workload_complexity,
+                    "availability_requirements": availability_requirements,
+                    "data_classification": data_classification,
                     "performance_tier": performance_tier,
+                    "response_time": response_time,
+                    "scalability_needs": scalability_needs,
+                    "monthly_budget": monthly_budget,
+                    "cost_strategy": cost_strategy,
                     "usage_pattern": usage_pattern,
+                    "compliance_requirements": compliance_requirements,
+                    "disaster_recovery": disaster_recovery,
                     "data_volume_gb": data_volume_gb,
                     "expected_users": expected_users
                 },
                 "services": st.session_state.configurations
             }, indent=2),
-            file_name="aws_config.json",
+            file_name="aws_architecture_plan.json",
             mime="application/json",
             key="download_config"
         )
