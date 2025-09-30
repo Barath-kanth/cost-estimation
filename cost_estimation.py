@@ -158,7 +158,7 @@ class InnovativePricing:
         base_price *= region_multipliers.get(region, 1.0)
 
             
-        elif service == "Amazon Bedrock":
+        if service == "Amazon Bedrock":
             model = config.get('model', 'Claude')
             requests = config.get('requests_per_month', 10000)
             tokens = config.get('avg_tokens', 1000)
