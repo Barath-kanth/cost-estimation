@@ -280,25 +280,21 @@ SECURITY_PRICING = {
 def render_service_configurator(service: str, key_prefix: str) -> Dict:
     """Render configuration options for selected service"""
     config = {}
-    
     if service == "Amazon EC2":
         st.markdown("##### Instance Configuration")
-        
         family = st.selectbox(
             "Instance Family",
             list(INSTANCE_FAMILIES.keys()),
             help="Choose instance family based on workload",
             key=f"{key_prefix}_family"
         )
-        
         instance_types = list(INSTANCE_FAMILIES[family].keys())
         selected_type = st.selectbox(
-            "Instance Type", 
+            "Instance Type",
             instance_types,
             key=f"{key_prefix}_type"
         )
         specs = INSTANCE_FAMILIES[family][selected_type]
-        
         col1, col2, col3 = st.columns(3)
         with col1:
             st.metric("vCPU", specs["vCPU"])
@@ -306,22 +302,18 @@ def render_service_configurator(service: str, key_prefix: str) -> Dict:
             st.metric("Memory (GiB)", specs["Memory"])
         with col3:
             st.metric("Price/Hour", f"${specs['Price']}")
-        
         config.update({
             "instance_type": selected_type,
             "instance_count": st.number_input("Number of Instances", 1, 100, 1, key=f"{key_prefix}_count"),
             "storage_gb": st.number_input("EBS Storage (GB)", 8, 16384, 30, key=f"{key_prefix}_storage")
         })
-    
     elif service == "Amazon ECS":
         st.markdown("##### Container Configuration")
-        
         launch_type = st.radio(
             "Launch Type",
             ["Fargate", "EC2"],
             key=f"{key_prefix}_launch_type"
         )
-        
         col1, col2 = st.columns(2)
         with col1:
             vcpu = st.number_input("vCPU Units", 0.25, 4.0, 0.5, 0.25, key=f"{key_prefix}_vcpu")
@@ -329,33 +321,44 @@ def render_service_configurator(service: str, key_prefix: str) -> Dict:
         with col2:
             memory = st.number_input("Memory (GB)", 0.5, 30.0, 1.0, 0.5, key=f"{key_prefix}_memory")
             st.metric("Memory (GB)", memory)
-        
         tasks = st.number_input("Number of Tasks", 1, 100, 1, key=f"{key_prefix}_tasks")
-        
         config.update({
             "launch_type": launch_type,
             "vcpu": vcpu,
             "memory_gb": memory,
             "tasks": tasks
         })
-    
+        # Calculate and display the price for ECS
+        if launch_type == "Fargate":
+            # Calculate price for Fargate
+            price_per_vcpu_hour = 0.04048  # Example price per vCPU per hour
+            price_per_gb_hour = 0.004445  # Example price per GB per hour
+            price_per_task_hour = (vcpu * price_per_vcpu_hour) + (memory * price_per_gb_hour)
+            price_per_task_month = price_per_task_hour * 24 * 30  # Assuming 30 days in a month
+            total_price = price_per_task_month * tasks
+            st.metric("Estimated Monthly Cost", f"${total_price:,.2f}")
+        elif launch_type == "EC2":
+            # Calculate price for EC2
+            price_per_vcpu_hour = 0.01  # Example price per vCPU per hour
+            price_per_gb_hour = 0.001  # Example price per GB per hour
+            price_per_task_hour = (vcpu * price_per_vcpu_hour) + (memory * price_per_gb_hour)
+            price_per_task_month = price_per_task_hour * 24 * 30  # Assuming 30 days in a month
+            total_price = price_per_task_month * tasks
+            st.metric("Estimated Monthly Cost", f"${total_price:,.2f}")
     elif service == "Amazon RDS":
         st.markdown("##### Database Configuration")
-        
         engine = st.selectbox(
             "Database Engine",
             list(DATABASE_PRICING.keys()),
             key=f"{key_prefix}_engine"
         )
-        
         instance_types = list(DATABASE_PRICING[engine].keys())
         selected_type = st.selectbox(
-            "Instance Type", 
+            "Instance Type",
             instance_types,
             key=f"{key_prefix}_type"
         )
         specs = DATABASE_PRICING[engine][selected_type]
-        
         col1, col2 = st.columns(2)
         with col1:
             st.metric("vCPU", specs["vCPU"])
@@ -363,73 +366,50 @@ def render_service_configurator(service: str, key_prefix: str) -> Dict:
         with col2:
             st.metric("Memory (GiB)", specs["Memory"])
             multi_az = st.checkbox("Multi-AZ Deployment", key=f"{key_prefix}_multiaz")
-        
         config.update({
             "engine": engine,
             "instance_type": selected_type,
             "storage_gb": storage,
             "multi_az": multi_az
         })
-    
     elif service == "Amazon S3":
         st.markdown("##### Storage Configuration")
-        
         storage_class = st.selectbox(
             "Storage Class",
             list(STORAGE_PRICING.keys()),
             key=f"{key_prefix}_class"
         )
-        
         col1, col2 = st.columns(2)
         with col1:
             storage = st.number_input("Storage (GB)", 1, 1000000, 100, key=f"{key_prefix}_storage")
             st.metric("Price/GB/Month", f"${STORAGE_PRICING[storage_class]}")
-        
         config.update({
             "storage_class": storage_class,
             "storage_gb": storage
         })
-    
     elif service == "Amazon Bedrock":
         st.markdown("##### Model Configuration")
-        
         model = st.selectbox(
             "Foundation Model",
             list(AI_ML_PRICING["Bedrock"].keys()),
             key=f"{key_prefix}_model"
         )
-        
         col1, col2 = st.columns(2)
         with col1:
             requests = st.number_input("Monthly Requests", 1000, 10000000, 10000, key=f"{key_prefix}_requests")
         with col2:
             tokens = st.number_input("Avg Tokens/Request", 100, 10000, 1000, key=f"{key_prefix}_tokens")
-        
-        st.metric("Price/1K Tokens", f"${AI_ML_PRICING['Bedrock'][model]}")
-        
+            st.metric("Price/1K Tokens", f"${AI_ML_PRICING['Bedrock'][model]}")
         config.update({
             "model": model,
             "requests_per_month": requests,
             "avg_tokens": tokens
         })
-    
     config["region"] = st.selectbox(
         "Region",
         ["us-east-1", "us-west-2", "eu-west-1", "ap-southeast-1"],
         key=f"{key_prefix}_region"
     )
-    
-    return config
-    
-    # ... Add configurations for other services with unique keys ...
-    
-    # Add region selection with unique key
-    config["region"] = st.selectbox(
-        "Region",
-        ["us-east-1", "us-west-2", "eu-west-1", "ap-southeast-1"],
-        key=f"{key_prefix}_region"
-    )
-    
     return config
 
 # Update the main function to pass unique keys
