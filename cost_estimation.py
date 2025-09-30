@@ -372,7 +372,7 @@ def render_service_configurator(service: str, key_prefix: str) -> Dict:
             "storage_gb": st.number_input("EBS Storage (GB)", 8, 16384, 30, key=f"{key_prefix}_storage")
         })
 
-        elif service == "AWS Lambda":
+    elif service == "AWS Lambda":
         st.markdown("##### Lambda Function Configuration")
         
         col1, col2, col3 = st.columns(3)
