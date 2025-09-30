@@ -143,7 +143,7 @@ class InnovativePricing:
             base_price = (storage_gb * STORAGE_PRICING[storage_class]) + (requests / 1000 * 0.0004)
             
         elif service == "AWS Lambda":
-        st.markdown("##### Lambda Function Configuration")
+            st.markdown("##### Lambda Function Configuration")
     
         col1, col2, col3 = st.columns(3)
         with col1:
