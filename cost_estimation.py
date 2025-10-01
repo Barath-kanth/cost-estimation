@@ -148,44 +148,83 @@ class ServiceSelector:
         
         return selected_services
 
-class TimelineCalculator:
+class YearlyTimelineCalculator:
     @staticmethod
-    def calculate_timeline_costs(base_monthly_cost: float, timeline_months: int, growth_rate: float = 0.0) -> Dict:
-        """Calculate costs over timeline with growth rate"""
-        timeline_data = {
-            "months": [],
-            "costs": [],
+    def calculate_yearly_costs(base_monthly_cost: float, years: int, growth_rate: float = 0.0) -> Dict:
+        """Calculate costs over years with growth rate"""
+        yearly_data = {
+            "years": [],
+            "yearly_costs": [],
+            "monthly_costs": [],
             "cumulative_costs": [],
             "total_cost": 0.0
         }
         
         cumulative = 0.0
-        for month in range(1, timeline_months + 1):
+        for year in range(1, years + 1):
+            # Calculate monthly cost for this year (with growth applied)
+            monthly_cost_year = base_monthly_cost * (1 + growth_rate) ** ((year - 1) * 12)
+            yearly_cost = monthly_cost_year * 12
+            
+            cumulative += yearly_cost
+            
+            yearly_data["years"].append(f"Year {year}")
+            yearly_data["yearly_costs"].append(yearly_cost)
+            yearly_data["monthly_costs"].append(monthly_cost_year)
+            yearly_data["cumulative_costs"].append(cumulative)
+        
+        yearly_data["total_cost"] = cumulative
+        return yearly_data
+    
+    @staticmethod
+    def calculate_detailed_monthly_timeline(base_monthly_cost: float, total_months: int, growth_rate: float = 0.0) -> Dict:
+        """Calculate detailed monthly breakdown"""
+        monthly_data = {
+            "months": [],
+            "monthly_costs": [],
+            "cumulative_costs": [],
+            "total_cost": 0.0
+        }
+        
+        cumulative = 0.0
+        for month in range(1, total_months + 1):
             monthly_cost = base_monthly_cost * (1 + growth_rate) ** (month - 1)
             cumulative += monthly_cost
             
-            timeline_data["months"].append(f"Month {month}")
-            timeline_data["costs"].append(monthly_cost)
-            timeline_data["cumulative_costs"].append(cumulative)
+            # Format month display
+            year = (month - 1) // 12 + 1
+            month_in_year = (month - 1) % 12 + 1
+            monthly_data["months"].append(f"Y{year} M{month_in_year}")
+            monthly_data["monthly_costs"].append(monthly_cost)
+            monthly_data["cumulative_costs"].append(cumulative)
         
-        timeline_data["total_cost"] = cumulative
-        return timeline_data
+        monthly_data["total_cost"] = cumulative
+        return monthly_data
     
     @staticmethod
     def render_timeline_selector() -> Dict:
         """Render timeline configuration UI"""
         st.subheader("💰 Timeline & Usage Pattern")
         
-        col1, col2, col3 = st.columns(3)
+        col1, col2, col3, col4 = st.columns(4)
         
         with col1:
             timeline_type = st.selectbox(
                 "Timeline Period",
-                ["1 Month", "3 Months", "6 Months", "12 Months", "24 Months", "36 Months"],
+                [
+                    "1 Month", "3 Months", "6 Months", 
+                    "1 Year (12 Months)", "2 Years (24 Months)", 
+                    "3 Years (36 Months)", "5 Years (60 Months)"
+                ],
                 index=3,
                 help="Select your planning horizon"
             )
-            timeline_months = int(timeline_type.split()[0])
+            # Extract months from selection
+            if "Year" in timeline_type:
+                years = int(timeline_type.split()[0])
+                total_months = years * 12
+            else:
+                total_months = int(timeline_type.split()[0])
         
         with col2:
             usage_pattern = st.selectbox(
@@ -205,6 +244,13 @@ class TimelineCalculator:
                 help="Expected monthly growth in usage"
             ) / 100
         
+        with col4:
+            commitment_type = st.selectbox(
+                "Commitment Type",
+                ["On-Demand", "1-Year Reserved", "3-Year Reserved", "Savings Plans"],
+                help="AWS pricing commitment level"
+            )
+        
         # Usage pattern multipliers
         pattern_multipliers = {
             "Development": 0.6,
@@ -214,11 +260,23 @@ class TimelineCalculator:
             "24x7": 1.8
         }
         
+        # Commitment discounts
+        commitment_discounts = {
+            "On-Demand": 1.0,
+            "1-Year Reserved": 0.7,  # 30% discount
+            "3-Year Reserved": 0.5,  # 50% discount
+            "Savings Plans": 0.72    # 28% discount
+        }
+        
         return {
-            "timeline_months": timeline_months,
+            "timeline_type": timeline_type,
+            "total_months": total_months,
+            "years": total_months // 12,
             "usage_pattern": usage_pattern,
             "pattern_multiplier": pattern_multipliers[usage_pattern],
-            "growth_rate": growth_rate
+            "growth_rate": growth_rate,
+            "commitment_type": commitment_type,
+            "commitment_discount": commitment_discounts[commitment_type]
         }
 
 class DynamicPricingEngine:
@@ -230,18 +288,31 @@ class DynamicPricingEngine:
         # Apply usage pattern multiplier
         adjusted_price = base_price * timeline_config["pattern_multiplier"]
         
-        # Calculate timeline
-        timeline_data = TimelineCalculator.calculate_timeline_costs(
-            adjusted_price, 
-            timeline_config["timeline_months"],
+        # Apply commitment discount
+        discounted_price = adjusted_price * timeline_config["commitment_discount"]
+        
+        # Calculate yearly breakdown
+        yearly_data = YearlyTimelineCalculator.calculate_yearly_costs(
+            discounted_price, 
+            timeline_config["years"],
+            timeline_config["growth_rate"]
+        )
+        
+        # Calculate detailed monthly timeline
+        monthly_data = YearlyTimelineCalculator.calculate_detailed_monthly_timeline(
+            discounted_price,
+            timeline_config["total_months"],
             timeline_config["growth_rate"]
         )
         
         return {
             "base_monthly_cost": base_price,
             "adjusted_monthly_cost": adjusted_price,
-            "timeline_data": timeline_data,
-            "total_timeline_cost": timeline_data["total_cost"]
+            "discounted_monthly_cost": discounted_price,
+            "yearly_data": yearly_data,
+            "monthly_data": monthly_data,
+            "total_timeline_cost": monthly_data["total_cost"],
+            "commitment_savings": adjusted_price - discounted_price
         }
     
     @staticmethod
@@ -487,45 +558,59 @@ def render_service_configurator(service: str, key_prefix: str) -> Dict:
     
     return config
 
-def render_timeline_visualization(timeline_data: Dict, service_name: str):
-    """Render timeline visualization for service costs"""
-    if not timeline_data or "months" not in timeline_data:
+def render_yearly_visualization(yearly_data: Dict, service_name: str):
+    """Render yearly visualization for service costs"""
+    if not yearly_data or "years" not in yearly_data:
         return
     
     # Create visualization
     fig = go.Figure()
     
-    # Monthly costs
+    # Yearly costs
     fig.add_trace(go.Bar(
-        x=timeline_data["months"],
-        y=timeline_data["costs"],
-        name='Monthly Cost',
-        marker_color='lightblue'
+        x=yearly_data["years"],
+        y=yearly_data["yearly_costs"],
+        name='Yearly Cost',
+        marker_color='lightblue',
+        text=[f'${cost:,.0f}' for cost in yearly_data["yearly_costs"]],
+        textposition='auto'
     ))
     
     # Cumulative costs
     fig.add_trace(go.Scatter(
-        x=timeline_data["months"],
-        y=timeline_data["cumulative_costs"],
+        x=yearly_data["years"],
+        y=yearly_data["cumulative_costs"],
         name='Cumulative Cost',
         line=dict(color='orange', width=3),
-        yaxis='y2'
+        yaxis='y2',
+        text=[f'${cost:,.0f}' for cost in yearly_data["cumulative_costs"]],
+        textposition='top center'
     ))
     
     fig.update_layout(
-        title=f"{service_name} - Cost Timeline",
+        title=f"{service_name} - Yearly Cost Breakdown",
         xaxis_title="Timeline",
-        yaxis_title="Monthly Cost ($)",
+        yaxis_title="Yearly Cost ($)",
         yaxis2=dict(
             title="Cumulative Cost ($)",
             overlaying='y',
             side='right'
         ),
         showlegend=True,
-        height=300
+        height=400
     )
     
     st.plotly_chart(fig, use_container_width=True)
+    
+    # Display yearly breakdown table
+    st.subheader("📅 Yearly Cost Breakdown")
+    yearly_df = pd.DataFrame({
+        'Year': yearly_data["years"],
+        'Monthly Cost': [f'${cost:,.2f}' for cost in yearly_data["monthly_costs"]],
+        'Yearly Cost': [f'${cost:,.2f}' for cost in yearly_data["yearly_costs"]],
+        'Cumulative Cost': [f'${cost:,.2f}' for cost in yearly_data["cumulative_costs"]]
+    })
+    st.dataframe(yearly_df, use_container_width=True)
 
 def main():
     st.set_page_config(
@@ -540,7 +625,7 @@ def main():
     initialize_session_state()
     
     # TIMELINE CONFIGURATION
-    timeline_config = TimelineCalculator.render_timeline_selector()
+    timeline_config = YearlyTimelineCalculator.render_timeline_selector()
     
     # PROJECT REQUIREMENTS SECTION
     with st.expander("📋 Project Requirements & Architecture", expanded=True):
@@ -609,13 +694,15 @@ def main():
                     )
                     
                     # Display pricing information
-                    col1, col2, col3 = st.columns(3)
+                    col1, col2, col3, col4 = st.columns(4)
                     with col1:
-                        st.metric("Base Monthly Cost", f"${pricing_result['base_monthly_cost']:,.2f}")
+                        st.metric("Base Monthly", f"${pricing_result['base_monthly_cost']:,.2f}")
                     with col2:
-                        st.metric("Adjusted Monthly Cost", f"${pricing_result['adjusted_monthly_cost']:,.2f}")
+                        st.metric("Adjusted Monthly", f"${pricing_result['adjusted_monthly_cost']:,.2f}")
                     with col3:
-                        st.metric(f"Total {timeline_config['timeline_months']} Month Cost", 
+                        st.metric("After Commitment", f"${pricing_result['discounted_monthly_cost']:,.2f}")
+                    with col4:
+                        st.metric(f"Total {timeline_config['timeline_type']}", 
                                  f"${pricing_result['total_timeline_cost']:,.2f}")
                     
                     # Store configuration
@@ -627,16 +714,16 @@ def main():
                     # Add to total cost
                     st.session_state.total_cost += pricing_result['total_timeline_cost']
                     
-                    # Show timeline visualization
-                    render_timeline_visualization(pricing_result['timeline_data'], service)
+                    # Show yearly visualization
+                    render_yearly_visualization(pricing_result['yearly_data'], service)
         
         # COST SUMMARY & VISUALIZATION
         st.header("💰 Cost Summary & Analysis")
         
-        # Overall timeline calculation
-        overall_timeline = TimelineCalculator.calculate_timeline_costs(
-            sum([config['pricing']['adjusted_monthly_cost'] for config in st.session_state.configurations.values()]),
-            timeline_config["timeline_months"],
+        # Calculate overall yearly breakdown
+        overall_yearly_data = YearlyTimelineCalculator.calculate_yearly_costs(
+            sum([config['pricing']['discounted_monthly_cost'] for config in st.session_state.configurations.values()]),
+            timeline_config["years"],
             timeline_config["growth_rate"]
         )
         
@@ -645,16 +732,17 @@ def main():
         with col1:
             st.metric("Total Timeline Cost", f"${st.session_state.total_cost:,.2f}")
         with col2:
-            avg_monthly = st.session_state.total_cost / timeline_config["timeline_months"]
+            avg_monthly = st.session_state.total_cost / timeline_config["total_months"]
             st.metric("Average Monthly Cost", f"${avg_monthly:,.2f}")
         with col3:
-            st.metric("Services Configured", len(st.session_state.configurations))
+            avg_yearly = st.session_state.total_cost / timeline_config["years"]
+            st.metric("Average Yearly Cost", f"${avg_yearly:,.2f}")
         with col4:
-            st.metric("Timeline Period", f"{timeline_config['timeline_months']} Months")
+            st.metric("Timeline Period", timeline_config["timeline_type"])
         
-        # Overall timeline visualization
-        st.subheader("📊 Overall Cost Timeline")
-        render_timeline_visualization(overall_timeline, "All Services")
+        # Overall yearly visualization
+        st.subheader("📊 Overall Yearly Cost Breakdown")
+        render_yearly_visualization(overall_yearly_data, "All Services")
         
         # Cost breakdown by service
         st.subheader("🔍 Cost Breakdown by Service")
@@ -671,6 +759,20 @@ def main():
             )
             st.plotly_chart(fig_pie, use_container_width=True)
         
+        # COMMITMENT SAVINGS ANALYSIS
+        st.subheader("💵 Commitment Savings Analysis")
+        total_savings = sum([config['pricing']['commitment_savings'] * timeline_config["total_months"] 
+                           for config in st.session_state.configurations.values()])
+        
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.metric("Commitment Type", timeline_config["commitment_type"])
+        with col2:
+            discount_pct = (1 - timeline_config["commitment_discount"]) * 100
+            st.metric("Discount Applied", f"{discount_pct:.1f}%")
+        with col3:
+            st.metric("Total Savings", f"${total_savings:,.2f}")
+        
         # RECOMMENDATIONS
         with st.expander("💡 Optimization Recommendations", expanded=True):
             st.write("Based on your configuration, here are some optimization suggestions:")
@@ -685,7 +787,7 @@ def main():
                         st.info(f"**{service}**: Consider using fewer instances or smaller instance types for development workload")
                     
                     if pricing['adjusted_monthly_cost'] > 1000:
-                        st.info(f"**{service}**: Explore Reserved Instances for potential 30-40% savings")
+                        st.info(f"**{service}**: Explore Reserved Instances for potential 30-50% savings")
                 
                 elif service == "Amazon RDS":
                     if service_config.get('multi_az', False) and timeline_config["usage_pattern"] == "Development":
@@ -712,15 +814,19 @@ def main():
                     "pricing": {
                         "base_monthly_cost": config["pricing"]["base_monthly_cost"],
                         "adjusted_monthly_cost": config["pricing"]["adjusted_monthly_cost"],
-                        "total_timeline_cost": config["pricing"]["total_timeline_cost"]
+                        "discounted_monthly_cost": config["pricing"]["discounted_monthly_cost"],
+                        "total_timeline_cost": config["pricing"]["total_timeline_cost"],
+                        "yearly_breakdown": config["pricing"]["yearly_data"]
                     }
                 }
                 for service, config in st.session_state.configurations.items()
             },
             "summary": {
                 "total_timeline_cost": st.session_state.total_cost,
-                "average_monthly_cost": st.session_state.total_cost / timeline_config["timeline_months"],
+                "average_monthly_cost": st.session_state.total_cost / timeline_config["total_months"],
+                "average_yearly_cost": st.session_state.total_cost / timeline_config["years"],
                 "services_count": len(st.session_state.configurations),
+                "timeline_period": timeline_config["timeline_type"],
                 "generated_at": datetime.now().isoformat()
             }
         }
