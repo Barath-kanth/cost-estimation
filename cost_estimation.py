@@ -5,14 +5,11 @@ from typing import Dict, List, Optional
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 import pandas as pd
-import plotly.express as px
-import plotly.graph_objects as go
 from concurrent.futures import ThreadPoolExecutor
 import time
 
 # AWS Pricing API configuration
 AWS_PRICING_API_BASE = "https://pricing.us-east-1.amazonaws.com"
-AWS_PRICING_API_PATH = "/offers/v1.0/aws/AmazonEC2/current/index.json"
 
 def initialize_session_state():
     """Initialize session state variables"""
@@ -32,8 +29,6 @@ class AWSPricingAPI:
     def get_ec2_pricing(region: str = 'us-east-1') -> Dict:
         """Fetch EC2 pricing from AWS Price List API"""
         try:
-            # Note: AWS Pricing API requires proper authentication in production
-            # This is a simplified version - in production, use boto3 or proper API keys
             url = f"{AWS_PRICING_API_BASE}/offers/v1.0/aws/AmazonEC2/current/{region}/index.json"
             response = requests.get(url, timeout=30)
             if response.status_code == 200:
@@ -62,28 +57,6 @@ class AWSPricingAPI:
                 }
             }
         }
-    
-    @staticmethod
-    def extract_instance_prices(pricing_data: Dict, instance_types: List[str]) -> Dict:
-        """Extract prices for specific instance types"""
-        prices = {}
-        try:
-            for product_id, product_data in pricing_data.get('products', {}).items():
-                if product_data.get('productFamily') == 'Compute Instance':
-                    instance_type = product_data.get('attributes', {}).get('instanceType')
-                    if instance_type in instance_types:
-                        # Extract OnDemand pricing
-                        for term_id, term_data in pricing_data.get('terms', {}).get('OnDemand', {}).items():
-                            if term_id.startswith(product_id):
-                                for dimension_id, dimension_data in term_data.get('priceDimensions', {}).items():
-                                    price = dimension_data.get('pricePerUnit', {}).get('USD', '0')
-                                    prices[instance_type] = float(price)
-                                    break
-                                break
-        except Exception as e:
-            st.error(f"Error extracting prices: {str(e)}")
-        
-        return prices
 
 AWS_SERVICES = {
     "Compute": {
@@ -318,14 +291,12 @@ class DynamicPricingEngine:
     @staticmethod
     def _calculate_base_price(service: str, config: Dict) -> float:
         """Calculate base monthly price for service"""
-        # This would integrate with actual AWS Pricing API
-        # For now, using realistic estimates that would come from API
         
         if service == "Amazon EC2":
             instance_type = config.get('instance_type', 't3.micro')
             instance_count = config.get('instance_count', 1)
             
-            # Sample pricing - in production, fetch from API
+            # Sample pricing
             instance_prices = {
                 't3.micro': 0.0104, 't3.small': 0.0208, 't3.medium': 0.0416,
                 'm5.large': 0.096, 'm5.xlarge': 0.192,
@@ -522,7 +493,6 @@ def render_service_configurator(service: str, key_prefix: str) -> Dict:
             "encryption": encryption
         })
     
-    # Add configuration for other services...
     elif service == "Amazon S3":
         st.write("**Storage Configuration**")
         
@@ -559,58 +529,48 @@ def render_service_configurator(service: str, key_prefix: str) -> Dict:
     return config
 
 def render_yearly_visualization(yearly_data: Dict, service_name: str):
-    """Render yearly visualization for service costs"""
+    """Render yearly visualization for service costs using Streamlit native charts"""
     if not yearly_data or "years" not in yearly_data:
         return
     
-    # Create visualization
-    fig = go.Figure()
-    
-    # Yearly costs
-    fig.add_trace(go.Bar(
-        x=yearly_data["years"],
-        y=yearly_data["yearly_costs"],
-        name='Yearly Cost',
-        marker_color='lightblue',
-        text=[f'${cost:,.0f}' for cost in yearly_data["yearly_costs"]],
-        textposition='auto'
-    ))
-    
-    # Cumulative costs
-    fig.add_trace(go.Scatter(
-        x=yearly_data["years"],
-        y=yearly_data["cumulative_costs"],
-        name='Cumulative Cost',
-        line=dict(color='orange', width=3),
-        yaxis='y2',
-        text=[f'${cost:,.0f}' for cost in yearly_data["cumulative_costs"]],
-        textposition='top center'
-    ))
-    
-    fig.update_layout(
-        title=f"{service_name} - Yearly Cost Breakdown",
-        xaxis_title="Timeline",
-        yaxis_title="Yearly Cost ($)",
-        yaxis2=dict(
-            title="Cumulative Cost ($)",
-            overlaying='y',
-            side='right'
-        ),
-        showlegend=True,
-        height=400
-    )
-    
-    st.plotly_chart(fig, use_container_width=True)
-    
     # Display yearly breakdown table
-    st.subheader("📅 Yearly Cost Breakdown")
+    st.subheader(f"📅 {service_name} - Yearly Cost Breakdown")
+    
+    # Create DataFrame for display
     yearly_df = pd.DataFrame({
         'Year': yearly_data["years"],
         'Monthly Cost': [f'${cost:,.2f}' for cost in yearly_data["monthly_costs"]],
         'Yearly Cost': [f'${cost:,.2f}' for cost in yearly_data["yearly_costs"]],
         'Cumulative Cost': [f'${cost:,.2f}' for cost in yearly_data["cumulative_costs"]]
     })
+    
+    # Display table
     st.dataframe(yearly_df, use_container_width=True)
+    
+    # Create bar chart for yearly costs
+    chart_data = pd.DataFrame({
+        'Year': yearly_data["years"],
+        'Yearly Cost': yearly_data["yearly_costs"],
+        'Cumulative Cost': yearly_data["cumulative_costs"]
+    })
+    
+    # Display metrics
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.metric("Total Cost", f"${yearly_data['total_cost']:,.2f}")
+    with col2:
+        avg_yearly = yearly_data['total_cost'] / len(yearly_data["years"])
+        st.metric("Average Yearly", f"${avg_yearly:,.2f}")
+    with col3:
+        st.metric("Final Yearly", f"${yearly_data['yearly_costs'][-1]:,.2f}")
+    
+    # Create simple bar chart using Streamlit
+    st.subheader("📊 Yearly Cost Chart")
+    chart_df = pd.DataFrame({
+        'Year': yearly_data["years"],
+        'Yearly Cost ($)': yearly_data["yearly_costs"]
+    })
+    st.bar_chart(chart_df.set_index('Year'))
 
 def main():
     st.set_page_config(
@@ -752,12 +712,17 @@ def main():
         }
         
         if service_costs:
-            fig_pie = px.pie(
-                values=list(service_costs.values()),
-                names=list(service_costs.keys()),
-                title="Cost Distribution by Service"
-            )
-            st.plotly_chart(fig_pie, use_container_width=True)
+            # Create a simple bar chart for service costs
+            cost_df = pd.DataFrame({
+                'Service': list(service_costs.keys()),
+                'Total Cost': list(service_costs.values())
+            })
+            st.bar_chart(cost_df.set_index('Service'))
+            
+            # Display service costs table
+            st.write("**Detailed Service Costs:**")
+            for service, cost in service_costs.items():
+                st.write(f"- **{service}**: ${cost:,.2f}")
         
         # COMMITMENT SAVINGS ANALYSIS
         st.subheader("💵 Commitment Savings Analysis")
