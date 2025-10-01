@@ -401,11 +401,17 @@ def render_service_configurator(service: str, key_prefix: str) -> Dict:
         selected_type = st.selectbox(
             "Instance Type",
             instance_types,
-            key=f"{key_prefix}_type",
-            help=instance_families[family][selected_type]["Description"] if selected_type in instance_families[family] else ""
+            key=f"{key_prefix}_type"
         )
         
-        if selected_type in instance_families[family]:
+        # Get description safely
+        description = ""
+        if family in instance_families and selected_type in instance_families[family]:
+            description = instance_families[family][selected_type]["Description"]
+        
+        st.caption(f"*{description}*")
+        
+        if family in instance_families and selected_type in instance_families[family]:
             specs = instance_families[family][selected_type]
             col1, col2, col3 = st.columns(3)
             with col1:
@@ -448,9 +454,15 @@ def render_service_configurator(service: str, key_prefix: str) -> Dict:
         engine = st.selectbox(
             "Database Engine",
             list(database_engines.keys()),
-            key=f"{key_prefix}_engine",
-            help=database_engines[engine]["Description"] if engine in database_engines else ""
+            key=f"{key_prefix}_engine"
         )
+        
+        # Get description safely
+        engine_description = ""
+        if engine in database_engines:
+            engine_description = database_engines[engine]["Description"]
+        
+        st.caption(f"*{engine_description}*")
         
         # Instance types for RDS
         rds_instance_types = {
@@ -464,9 +476,15 @@ def render_service_configurator(service: str, key_prefix: str) -> Dict:
         selected_type = st.selectbox(
             "Instance Type",
             list(rds_instance_types.keys()),
-            key=f"{key_prefix}_type",
-            help=rds_instance_types[selected_type]["Description"] if selected_type in rds_instance_types else ""
+            key=f"{key_prefix}_type"
         )
+        
+        # Get description safely
+        instance_description = ""
+        if selected_type in rds_instance_types:
+            instance_description = rds_instance_types[selected_type]["Description"]
+        
+        st.caption(f"*{instance_description}*")
         
         if selected_type in rds_instance_types:
             specs = rds_instance_types[selected_type]
@@ -508,15 +526,57 @@ def render_service_configurator(service: str, key_prefix: str) -> Dict:
         storage_class = st.selectbox(
             "Storage Class",
             list(storage_classes.keys()),
-            key=f"{key_prefix}_class",
-            help=storage_classes[storage_class]["Description"] if storage_class in storage_classes else ""
+            key=f"{key_prefix}_class"
         )
+        
+        # Get description safely
+        storage_description = ""
+        if storage_class in storage_classes:
+            storage_description = storage_classes[storage_class]["Description"]
+        
+        st.caption(f"*{storage_description}*")
         
         storage_gb = st.slider("Storage (GB)", 1, 1000000, 100, key=f"{key_prefix}_storage")
         
         config.update({
             "storage_class": storage_class,
             "storage_gb": storage_gb
+        })
+    
+    elif service == "AWS Lambda":
+        st.write("**Lambda Function Configuration**")
+        
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            memory_mb = st.selectbox(
+                "Memory (MB)",
+                [128, 256, 512, 1024, 2048, 3008, 4096, 5120, 6144, 7168, 8192, 9216, 10240],
+                index=0,
+                key=f"{key_prefix}_memory"
+            )
+        with col2:
+            requests = st.number_input(
+                "Monthly Requests",
+                min_value=1000,
+                max_value=100000000,
+                value=1000000,
+                step=100000,
+                key=f"{key_prefix}_requests"
+            )
+        with col3:
+            duration_ms = st.number_input(
+                "Average Duration (ms)",
+                min_value=100,
+                max_value=90000,
+                value=1000,
+                step=100,
+                key=f"{key_prefix}_duration"
+            )
+        
+        config.update({
+            "memory_mb": memory_mb,
+            "requests_per_month": requests,
+            "avg_duration_ms": duration_ms
         })
     
     # Region selection for all services
