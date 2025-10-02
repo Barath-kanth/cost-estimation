@@ -1694,7 +1694,7 @@ def main():
     initialize_session_state()
 
         # GENERATE ARCHITECTURE DIAGRAM (MERMAID VERSION - NO GRAPHVIZ NEEDED)
-        if st.session_state.selected_services and st.session_state.configurations:
+    if st.session_state.selected_services and st.session_state.configurations:
             st.header("🏗️ Architecture Diagram")
             
             # Generate Mermaid diagram
