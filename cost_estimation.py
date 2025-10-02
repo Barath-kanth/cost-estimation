@@ -114,123 +114,139 @@ AWS_SERVICES = {
 }
 
 class ArchitectureDiagramGenerator:
-    """Generate AWS architecture diagrams automatically"""
-    
-    # Map service names to diagram icons
-    SERVICE_ICON_MAP = {
-        "Amazon EC2": "EC2",
-        "AWS Lambda": "Lambda",
-        "Amazon ECS": "ECS",
-        "Amazon EKS": "EKS",
-        "Amazon S3": "S3",
-        "Amazon EBS": "EBS",
-        "Amazon EFS": "EFS",
-        "Amazon RDS": "RDS",
-        "Amazon DynamoDB": "Dynamodb",
-        "Amazon ElastiCache": "ElastiCache",
-        "Amazon Bedrock": "Bedrock",
-        "Amazon SageMaker": "Sagemaker",
-        "Amazon Comprehend": "Comprehend",
-        "Amazon VPC": "VPC",
-        "Amazon CloudFront": "CloudFront",
-        "Elastic Load Balancing": "ELB",
-        "AWS WAF": "WAF",
-        "Amazon GuardDuty": "GuardDuty",
-        "AWS Shield": "Shield"
-    }
+    """Generate AWS architecture diagrams using Mermaid (No Graphviz required)"""
     
     @staticmethod
-    def get_icon_class(service_name: str):
-        """Get the appropriate icon class for a service"""
-        icon_mapping = {
-            "EC2": EC2,
-            "Lambda": Lambda,
-            "ECS": ECS,
-            "EKS": EKS,
-            "S3": S3,
-            "EBS": EBS,
-            "EFS": EFS,
-            "RDS": RDS,
-            "Dynamodb": Dynamodb,
-            "ElastiCache": ElastiCache,
-            "Bedrock": Sagemaker,  # Using Sagemaker as placeholder for Bedrock
-            "Sagemaker": Sagemaker,
-            "Comprehend": Comprehend,
-            "VPC": VPC,
-            "CloudFront": CloudFront,
-            "ELB": ELB,
-            "WAF": WAF,
-            "GuardDuty": GuardDuty,
-            "Shield": Shield
+    def generate_mermaid_diagram(selected_services: Dict, configurations: Dict) -> str:
+        """Generate Mermaid diagram code for AWS architecture"""
+        
+        # Start Mermaid diagram
+        mermaid_code = "graph LR\n"
+        mermaid_code += "    classDef compute fill:#FF9900,stroke:#232F3E,stroke-width:2px,color:#fff\n"
+        mermaid_code += "    classDef storage fill:#3B48CC,stroke:#232F3E,stroke-width:2px,color:#fff\n"
+        mermaid_code += "    classDef database fill:#3334B9,stroke:#232F3E,stroke-width:2px,color:#fff\n"
+        mermaid_code += "    classDef network fill:#5A30B5,stroke:#232F3E,stroke-width:2px,color:#fff\n"
+        mermaid_code += "    classDef security fill:#DD344C,stroke:#232F3E,stroke-width:2px,color:#fff\n"
+        mermaid_code += "    classDef ml fill:#01A88D,stroke:#232F3E,stroke-width:2px,color:#fff\n\n"
+        
+        # Track node IDs
+        node_ids = {}
+        node_counter = 0
+        
+        # Category to style mapping
+        category_styles = {
+            "Compute": "compute",
+            "Storage": "storage",
+            "Database": "database",
+            "AI/ML": "ml",
+            "Networking": "network",
+            "Security": "security"
         }
         
-        icon_name = ArchitectureDiagramGenerator.SERVICE_ICON_MAP.get(service_name)
-        return icon_mapping.get(icon_name, EC2)  # Default to EC2 if not found
-    
-    @staticmethod
-    def generate_architecture_diagram(selected_services: Dict, configurations: Dict) -> Optional[str]:
-        """Generate AWS architecture diagram based on selected services"""
-        if not DIAGRAMS_AVAILABLE:
-            return None
+        # Create nodes for each service
+        for category, services in selected_services.items():
+            if services:
+                for service in services:
+                    node_id = f"S{node_counter}"
+                    node_counter += 1
+                    
+                    # Get configuration details
+                    config = configurations.get(service, {}).get('config', {})
+                    
+                    # Create label with details
+                    label = service.replace("Amazon ", "").replace("AWS ", "")
+                    
+                    if service == "Amazon EC2" and config:
+                        instance_count = config.get('instance_count', 1)
+                        instance_type = config.get('instance_type', 't3.micro')
+                        label = f"{label}<br/>{instance_count}x {instance_type}"
+                    elif service == "Amazon RDS" and config:
+                        instance_type = config.get('instance_type', 'db.t3.micro')
+                        engine = config.get('engine', 'PostgreSQL')
+                        label = f"{label}<br/>{engine}<br/>{instance_type}"
+                    elif service == "Amazon S3" and config:
+                        storage_gb = config.get('storage_gb', 100)
+                        label = f"{label}<br/>{storage_gb}GB"
+                    elif service == "AWS Lambda" and config:
+                        memory = config.get('memory_mb', 128)
+                        label = f"{label}<br/>{memory}MB"
+                    
+                    # Add node
+                    mermaid_code += f"    {node_id}[\"{label}\"]\n"
+                    
+                    # Apply style
+                    style = category_styles.get(category, "compute")
+                    mermaid_code += f"    class {node_id} {style}\n"
+                    
+                    node_ids[service] = node_id
         
-        try:
-            # Create temporary directory for diagram
-            temp_dir = tempfile.mkdtemp()
-            diagram_path = os.path.join(temp_dir, "aws_architecture")
-            
-            # Create diagram with custom attributes
-            with Diagram(
-                "AWS Cloud Architecture",
-                filename=diagram_path,
-                show=False,
-                direction="LR",
-                graph_attr={
-                    "fontsize": "14",
-                    "bgcolor": "white",
-                    "pad": "0.5",
-                    "splines": "ortho"
-                }
-            ):
-                # Group services by category
-                service_nodes = {}
-                
-                for category, services in selected_services.items():
-                    if services:  # Only create cluster if there are services
-                        with Cluster(category):
-                            for service in services:
-                                icon_class = ArchitectureDiagramGenerator.get_icon_class(service)
-                                
-                                # Get configuration details if available
-                                config = configurations.get(service, {}).get('config', {})
-                                
-                                # Create label with key details
-                                label = service
-                                if service == "Amazon EC2" and config:
-                                    instance_count = config.get('instance_count', 1)
-                                    instance_type = config.get('instance_type', 't3.micro')
-                                    label = f"{service}\n{instance_count}x {instance_type}"
-                                elif service == "Amazon RDS" and config:
-                                    instance_type = config.get('instance_type', 'db.t3.micro')
-                                    label = f"{service}\n{instance_type}"
-                                elif service == "Amazon S3" and config:
-                                    storage_gb = config.get('storage_gb', 100)
-                                    label = f"{service}\n{storage_gb}GB"
-                                
-                                service_nodes[service] = icon_class(label)
-                
-                # Create logical connections between services
-                ArchitectureDiagramGenerator._create_service_connections(service_nodes, selected_services)
-            
-            # Return the path to generated diagram
-            diagram_file = f"{diagram_path}.png"
-            if os.path.exists(diagram_file):
-                return diagram_file
-            
-            return None
-            
-        except Exception as e:
-            st.error(f"Error generating architecture diagram: {str(e)}")
-            return None
+        mermaid_code += "\n"
+        
+        # Flatten services list
+        all_services = []
+        for services in selected_services.values():
+            all_services.extend(services)
+        
+        # Create connections
+        connections = []
+        
+        # CloudFront -> S3
+        if "Amazon CloudFront" in all_services and "Amazon S3" in all_services:
+            connections.append(("Amazon CloudFront", "Amazon S3", "distributes"))
+        
+        # ELB -> EC2/ECS/EKS
+        if "Elastic Load Balancing" in all_services:
+            for compute in ["Amazon EC2", "Amazon ECS", "Amazon EKS"]:
+                if compute in all_services:
+                    connections.append(("Elastic Load Balancing", compute, "routes"))
+        
+        # EC2/Lambda -> RDS/DynamoDB
+        compute_services = ["Amazon EC2", "AWS Lambda", "Amazon ECS", "Amazon EKS"]
+        database_services = ["Amazon RDS", "Amazon DynamoDB"]
+        
+        for compute in compute_services:
+            if compute in all_services:
+                for db in database_services:
+                    if db in all_services:
+                        connections.append((compute, db, "queries"))
+                        break
+        
+        # EC2 -> S3
+        if "Amazon EC2" in all_services and "Amazon S3" in all_services:
+            if not any(c[0] == "Amazon EC2" and c[1] == "Amazon S3" for c in connections):
+                connections.append(("Amazon EC2", "Amazon S3", "stores"))
+        
+        # Lambda -> S3
+        if "AWS Lambda" in all_services and "Amazon S3" in all_services:
+            connections.append(("AWS Lambda", "Amazon S3", "reads/writes"))
+        
+        # WAF -> CloudFront/ELB
+        if "AWS WAF" in all_services:
+            for frontend in ["Amazon CloudFront", "Elastic Load Balancing"]:
+                if frontend in all_services:
+                    connections.append(("AWS WAF", frontend, "protects"))
+                    break
+        
+        # EC2 -> ElastiCache
+        if "Amazon EC2" in all_services and "Amazon ElastiCache" in all_services:
+            connections.append(("Amazon EC2", "Amazon ElastiCache", "caches"))
+        
+        # SageMaker/Bedrock -> S3
+        for ml_service in ["Amazon SageMaker", "Amazon Bedrock"]:
+            if ml_service in all_services and "Amazon S3" in all_services:
+                connections.append((ml_service, "Amazon S3", "data"))
+        
+        # Add connections to diagram
+        for source, target, label in connections:
+            if source in node_ids and target in node_ids:
+                source_id = node_ids[source]
+                target_id = node_ids[target]
+                if label:
+                    mermaid_code += f"    {source_id} -->|{label}| {target_id}\n"
+                else:
+                    mermaid_code += f"    {source_id} --> {target_id}\n"
+        
+        return mermaid_code
     
     @staticmethod
     def _create_service_connections(service_nodes: Dict, selected_services: Dict):
@@ -1677,51 +1693,59 @@ def main():
     
     initialize_session_state()
 
-    if st.session_state.selected_services and st.session_state.configurations:
+        # GENERATE ARCHITECTURE DIAGRAM (MERMAID VERSION - NO GRAPHVIZ NEEDED)
+        if st.session_state.selected_services and st.session_state.configurations:
             st.header("🏗️ Architecture Diagram")
             
-            col1, col2 = st.columns([3, 1])
+            # Generate Mermaid diagram
+            mermaid_code = ArchitectureDiagramGenerator.generate_mermaid_diagram(
+                st.session_state.selected_services,
+                st.session_state.configurations
+            )
             
-            with col2:
-                if st.button("🔄 Generate Architecture Diagram", type="primary", use_container_width=True):
-                    with st.spinner("Generating architecture diagram..."):
-                        diagram_path = ArchitectureDiagramGenerator.generate_architecture_diagram(
-                            st.session_state.selected_services,
-                            st.session_state.configurations
-                        )
-                        
-                        if diagram_path:
-                            st.session_state.architecture_diagram = diagram_path
-                            st.success("✅ Architecture diagram generated!")
-                        else:
-                            st.error("Failed to generate diagram. Make sure 'diagrams' and 'graphviz' are installed.")
+            # Display the diagram using Streamlit's built-in mermaid support
+            st.subheader("📐 Your AWS Architecture")
+            
+            col1, col2 = st.columns([4, 1])
             
             with col1:
-                if DIAGRAMS_AVAILABLE:
-                    st.info("📊 Click 'Generate Architecture Diagram' to visualize your AWS architecture")
-                else:
-                    st.warning("⚠️ Install required packages to enable architecture diagram generation:")
-                    st.code("pip install diagrams graphviz", language="bash")
-                    st.markdown("Also install Graphviz system package: [Download Here](https://graphviz.org/download/)")
-            
-            # Display the diagram if it exists
-            if st.session_state.architecture_diagram and os.path.exists(st.session_state.architecture_diagram):
-                st.subheader("📐 Your AWS Architecture")
-                
                 try:
-                    image = Image.open(st.session_state.architecture_diagram)
-                    st.image(image, caption="AWS Cloud Architecture Diagram", use_container_width=True)
+                    # Use Streamlit's native mermaid rendering
+                    import streamlit.components.v1 as components
                     
-                    # Download button for diagram
-                    with open(st.session_state.architecture_diagram, "rb") as file:
-                        st.download_button(
-                            label="📥 Download Architecture Diagram",
-                            data=file,
-                            file_name=f"aws_architecture_{datetime.now().strftime('%Y%m%d_%H%M%S')}.png",
-                            mime="image/png"
-                        )
+                    # Create HTML with Mermaid
+                    html_code = f"""
+                    <div style="background: white; padding: 20px; border-radius: 10px;">
+                        <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+                        <script>
+                            mermaid.initialize({{ startOnLoad: true, theme: 'default' }});
+                        </script>
+                        <div class="mermaid">
+                            {mermaid_code}
+                        </div>
+                    </div>
+                    """
+                    
+                    components.html(html_code, height=600, scrolling=True)
+                    
                 except Exception as e:
                     st.error(f"Error displaying diagram: {str(e)}")
+                    st.code(mermaid_code, language="mermaid")
+            
+            with col2:
+                # Show mermaid code
+                with st.expander("📝 Mermaid Code"):
+                    st.code(mermaid_code, language="mermaid")
+                    
+                # Download button
+                st.download_button(
+                    label="📥 Download Mermaid",
+                    data=mermaid_code,
+                    file_name=f"aws_architecture_{datetime.now().strftime('%Y%m%d_%H%M%S')}.mmd",
+                    mime="text/plain"
+                )
+            
+            st.info("💡 Tip: You can copy the Mermaid code and paste it into https://mermaid.live for editing")
             
             st.markdown("---")
     
