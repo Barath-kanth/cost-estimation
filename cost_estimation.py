@@ -25,7 +25,7 @@ try:
     DIAGRAMS_AVAILABLE = True
 except ImportError:
     DIAGRAMS_AVAILABLE = False
-    st.warning("⚠️ Install 'diagrams' library for automatic architecture generation: pip install diagrams")
+   
 
 # AWS Pricing API configuration
 AWS_PRICING_API_BASE = "https://pricing.us-east-1.amazonaws.com"
