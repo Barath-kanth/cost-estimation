@@ -714,7 +714,667 @@ class DynamicPricingEngine:
         
         return 0.0
 
-# ... (keep all the render_service_configurator and other functions exactly as they were)
+def render_service_configurator(service: str, key_prefix: str) -> Dict:
+    """Render configuration options for selected service"""
+    config = {}
+    
+    if service == "Amazon EC2":
+        st.write("**Instance Configuration**")
+        
+        instance_families = {
+            "General Purpose": {
+                "t3.micro": {"vCPU": 2, "Memory": 1, "Description": "Burstable, low cost"},
+                "t3.small": {"vCPU": 2, "Memory": 2, "Description": "Burstable, small workloads"},
+                "t3.medium": {"vCPU": 2, "Memory": 4, "Description": "Burstable, medium workloads"},
+                "m5.large": {"vCPU": 2, "Memory": 8, "Description": "General purpose, balanced"},
+                "m5.xlarge": {"vCPU": 4, "Memory": 16, "Description": "General purpose, high performance"}
+            },
+            "Compute Optimized": {
+                "c5.large": {"vCPU": 2, "Memory": 4, "Description": "Compute intensive workloads"},
+                "c5.xlarge": {"vCPU": 4, "Memory": 8, "Description": "High performance computing"},
+                "c5.2xlarge": {"vCPU": 8, "Memory": 16, "Description": "Heavy computational loads"}
+            },
+            "Memory Optimized": {
+                "r5.large": {"vCPU": 2, "Memory": 16, "Description": "Memory intensive applications"},
+                "r5.xlarge": {"vCPU": 4, "Memory": 32, "Description": "High memory workloads"},
+                "r5.2xlarge": {"vCPU": 8, "Memory": 64, "Description": "Memory optimized enterprise apps"}
+            }
+        }
+        
+        family = st.selectbox(
+            "Instance Family",
+            list(instance_families.keys()),
+            help="Choose instance family based on workload type",
+            key=f"{key_prefix}_family"
+        )
+        
+        instance_types = list(instance_families[family].keys())
+        selected_type = st.selectbox(
+            "Instance Type",
+            instance_types,
+            key=f"{key_prefix}_type"
+        )
+        
+        description = ""
+        if family in instance_families and selected_type in instance_families[family]:
+            description = instance_families[family][selected_type]["Description"]
+        
+        st.caption(f"*{description}*")
+        
+        if family in instance_families and selected_type in instance_families[family]:
+            specs = instance_families[family][selected_type]
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                st.metric("vCPU", specs["vCPU"])
+            with col2:
+                st.metric("Memory (GiB)", specs["Memory"])
+            with col3:
+                st.metric("Type", family)
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            instance_count = st.number_input("Number of Instances", 1, 100, 1, key=f"{key_prefix}_count")
+        with col2:
+            volume_type = st.selectbox(
+                "EBS Volume Type",
+                ["gp3", "gp2", "io1", "io2", "st1", "sc1"],
+                key=f"{key_prefix}_volume_type",
+                help="gp3: General Purpose SSD, io1/io2: Provisioned IOPS SSD"
+            )
+        
+        storage_gb = st.slider("EBS Storage (GB)", 8, 16384, 30, key=f"{key_prefix}_storage")
+        
+        config.update({
+            "instance_type": selected_type,
+            "instance_count": instance_count,
+            "storage_gb": storage_gb,
+            "volume_type": volume_type
+        })
+        
+    elif service == "Amazon RDS":
+        st.write("**Database Configuration**")
+        
+        database_engines = {
+            "PostgreSQL": {"Description": "Open source relational database"},
+            "MySQL": {"Description": "Popular open source database"},
+            "Aurora MySQL": {"Description": "MySQL-compatible, high performance"},
+            "SQL Server": {"Description": "Microsoft SQL Server"}
+        }
+        
+        engine = st.selectbox(
+            "Database Engine",
+            list(database_engines.keys()),
+            key=f"{key_prefix}_engine"
+        )
+        
+        engine_description = ""
+        if engine in database_engines:
+            engine_description = database_engines[engine]["Description"]
+        
+        st.caption(f"*{engine_description}*")
+        
+        rds_instance_types = {
+            "db.t3.micro": {"vCPU": 2, "Memory": 1, "Description": "Development & test"},
+            "db.t3.small": {"vCPU": 2, "Memory": 2, "Description": "Small workloads"},
+            "db.t3.medium": {"vCPU": 2, "Memory": 4, "Description": "Medium workloads"},
+            "db.m5.large": {"vCPU": 2, "Memory": 8, "Description": "Production workloads"},
+            "db.r5.large": {"vCPU": 2, "Memory": 16, "Description": "Memory optimized"}
+        }
+        
+        selected_type = st.selectbox(
+            "Instance Type",
+            list(rds_instance_types.keys()),
+            key=f"{key_prefix}_type"
+        )
+        
+        instance_description = ""
+        if selected_type in rds_instance_types:
+            instance_description = rds_instance_types[selected_type]["Description"]
+        
+        st.caption(f"*{instance_description}*")
+        
+        if selected_type in rds_instance_types:
+            specs = rds_instance_types[selected_type]
+            col1, col2 = st.columns(2)
+            with col1:
+                st.metric("vCPU", specs["vCPU"])
+            with col2:
+                st.metric("Memory (GiB)", specs["Memory"])
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            storage = st.slider("Storage (GB)", 20, 65536, 100, key=f"{key_prefix}_storage")
+            backup_retention = st.slider("Backup Retention (Days)", 0, 35, 7, key=f"{key_prefix}_backup")
+        with col2:
+            multi_az = st.checkbox("Multi-AZ Deployment", key=f"{key_prefix}_multiaz")
+            encryption = st.checkbox("Encryption at Rest", value=True, key=f"{key_prefix}_encryption")
+        
+        config.update({
+            "engine": engine,
+            "instance_type": selected_type,
+            "storage_gb": storage,
+            "multi_az": multi_az,
+            "backup_retention": backup_retention,
+            "encryption": encryption
+        })
+    
+    elif service == "Amazon S3":
+        st.write("**Storage Configuration**")
+        
+        storage_classes = {
+            "Standard": {"Description": "Frequently accessed data"},
+            "Intelligent-Tiering": {"Description": "Automatically optimizes costs"},
+            "Standard-IA": {"Description": "Infrequently accessed data"},
+            "One Zone-IA": {"Description": "Infrequently accessed, single AZ"},
+            "Glacier": {"Description": "Archive data, retrieval in minutes-hours"},
+            "Glacier Deep Archive": {"Description": "Lowest cost, retrieval in hours"}
+        }
+        
+        storage_class = st.selectbox(
+            "Storage Class",
+            list(storage_classes.keys()),
+            key=f"{key_prefix}_class"
+        )
+        
+        # Get description safely
+        storage_description = ""
+        if storage_class in storage_classes:
+            storage_description = storage_classes[storage_class]["Description"]
+        
+        st.caption(f"*{storage_description}*")
+        
+        storage_gb = st.slider("Storage (GB)", 1, 1000000, 100, key=f"{key_prefix}_storage")
+        
+        config.update({
+            "storage_class": storage_class,
+            "storage_gb": storage_gb
+        })
+    
+    elif service == "AWS Lambda":
+        st.write("**Lambda Function Configuration**")
+        
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            memory_mb = st.selectbox(
+                "Memory (MB)",
+                [128, 256, 512, 1024, 2048, 3008, 4096, 5120, 6144, 7168, 8192, 9216, 10240],
+                index=0,
+                key=f"{key_prefix}_memory"
+            )
+        with col2:
+            requests = st.number_input(
+                "Monthly Requests",
+                min_value=1000,
+                max_value=100000000,
+                value=1000000,
+                step=100000,
+                key=f"{key_prefix}_requests"
+            )
+        with col3:
+            duration_ms = st.number_input(
+                "Average Duration (ms)",
+                min_value=100,
+                max_value=90000,
+                value=1000,
+                step=100,
+                key=f"{key_prefix}_duration"
+            )
+        
+        config.update({
+            "memory_mb": memory_mb,
+            "requests_per_month": requests,
+            "avg_duration_ms": duration_ms
+        })
+    
+    elif service == "Amazon ECS":
+        st.write("**ECS Cluster Configuration**")
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            cluster_type = st.selectbox(
+                "Cluster Type",
+                ["Fargate", "EC2"],
+                key=f"{key_prefix}_cluster_type"
+            )
+            
+            if cluster_type == "Fargate":
+                cpu_units = st.selectbox(
+                    "CPU Units",
+                    [256, 512, 1024, 2048, 4096],
+                    index=2,
+                    key=f"{key_prefix}_fargate_cpu"
+                )
+                
+                memory_gb = st.selectbox(
+                    "Memory (GB)",
+                    [0.5, 1, 2, 4, 8, 16, 30],
+                    index=3,
+                    key=f"{key_prefix}_fargate_memory"
+                )
+                
+                config.update({
+                    "cluster_type": cluster_type,
+                    "cpu_units": cpu_units,
+                    "memory_gb": memory_gb
+                })
+            else:
+                instance_count = st.number_input(
+                    "EC2 Instance Count",
+                    min_value=1,
+                    max_value=20,
+                    value=2,
+                    key=f"{key_prefix}_ec2_count"
+                )
+                
+                config.update({
+                    "cluster_type": cluster_type,
+                    "instance_count": instance_count
+                })
+        
+        with col2:
+            service_count = st.number_input(
+                "Number of Services",
+                min_value=1,
+                max_value=50,
+                value=3,
+                key=f"{key_prefix}_service_count"
+            )
+            
+            avg_tasks_per_service = st.slider(
+                "Average Tasks per Service",
+                min_value=1,
+                max_value=20,
+                value=2,
+                key=f"{key_prefix}_tasks"
+            )
+            
+            config.update({
+                "service_count": service_count,
+                "avg_tasks_per_service": avg_tasks_per_service
+            })
+    
+    elif service == "Amazon CloudFront":
+        st.write("**CDN Configuration**")
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            data_transfer_tb = st.slider(
+                "Monthly Data Transfer (TB)",
+                min_value=1,
+                max_value=1000,
+                value=50,
+                key=f"{key_prefix}_transfer"
+            )
+            
+            requests_million = st.slider(
+                "Monthly Requests (Millions)",
+                min_value=1,
+                max_value=1000,
+                value=10,
+                key=f"{key_prefix}_cdn_requests"
+            )
+        
+        with col2:
+            origin_type = st.selectbox(
+                "Origin Type",
+                ["S3", "EC2", "ALB", "Custom"],
+                key=f"{key_prefix}_origin"
+            )
+            
+            waf_enabled = st.checkbox(
+                "Enable WAF",
+                value=True,
+                key=f"{key_prefix}_waf"
+            )
+        
+        config.update({
+            "data_transfer_tb": data_transfer_tb,
+            "requests_million": requests_million,
+            "origin_type": origin_type,
+            "waf_enabled": waf_enabled
+        })
+    
+    elif service == "Amazon DynamoDB":
+        st.write("**DynamoDB Configuration**")
+        
+        capacity_mode = st.radio(
+            "Capacity Mode",
+            ["Provisioned", "On-Demand"],
+            key=f"{key_prefix}_capacity_mode"
+        )
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            if capacity_mode == "Provisioned":
+                read_capacity = st.number_input(
+                    "Read Capacity Units",
+                    min_value=1,
+                    max_value=100000,
+                    value=10,
+                    key=f"{key_prefix}_read_capacity"
+                )
+                
+                write_capacity = st.number_input(
+                    "Write Capacity Units",
+                    min_value=1,
+                    max_value=100000,
+                    value=10,
+                    key=f"{key_prefix}_write_capacity"
+                )
+                
+                config.update({
+                    "capacity_mode": capacity_mode,
+                    "read_capacity": read_capacity,
+                    "write_capacity": write_capacity
+                })
+            else:
+                config.update({
+                    "capacity_mode": capacity_mode
+                })
+        
+        with col2:
+            storage_gb = st.slider(
+                "Storage (GB)",
+                min_value=1,
+                max_value=10000,
+                value=100,
+                key=f"{key_prefix}_dynamo_storage"
+            )
+            
+            backup_enabled = st.checkbox(
+                "Enable Point-in-Time Recovery",
+                value=True,
+                key=f"{key_prefix}_backup"
+            )
+        
+        config.update({
+            "storage_gb": storage_gb,
+            "backup_enabled": backup_enabled
+        })
+    
+    elif service == "Elastic Load Balancing":
+        st.write("**Load Balancer Configuration**")
+        
+        lb_type = st.selectbox(
+            "Load Balancer Type",
+            ["Application Load Balancer", "Network Load Balancer"],
+            key=f"{key_prefix}_lb_type"
+        )
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            lcu_count = st.slider(
+                "Estimated LCU Hours/Month" if lb_type == "Application Load Balancer" else "Estimated NLCU Hours/Month",
+                min_value=100,
+                max_value=1000000,
+                value=10000,
+                key=f"{key_prefix}_lcu"
+            )
+            
+        with col2:
+            data_processed_tb = st.slider(
+                "Data Processed (TB/Month)",
+                min_value=1,
+                max_value=1000,
+                value=10,
+                key=f"{key_prefix}_lb_data"
+            )
+        
+        config.update({
+            "lb_type": lb_type,
+            "lcu_count": lcu_count,
+            "data_processed_tb": data_processed_tb
+        })
+    
+    elif service == "Amazon VPC":
+        st.write("**VPC Configuration**")
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            vpc_count = st.number_input(
+                "Number of VPCs",
+                min_value=1,
+                max_value=10,
+                value=1,
+                key=f"{key_prefix}_vpc_count"
+            )
+            
+            nat_gateways = st.number_input(
+                "NAT Gateways",
+                min_value=0,
+                max_value=20,
+                value=2,
+                key=f"{key_prefix}_nat"
+            )
+        
+        with col2:
+            vpc_endpoints = st.number_input(
+                "VPC Endpoints",
+                min_value=0,
+                max_value=50,
+                value=5,
+                key=f"{key_prefix}_endpoints"
+            )
+            
+            vpn_connections = st.number_input(
+                "VPN Connections",
+                min_value=0,
+                max_value=10,
+                value=0,
+                key=f"{key_prefix}_vpn"
+            )
+        
+        config.update({
+            "vpc_count": vpc_count,
+            "nat_gateways": nat_gateways,
+            "vpc_endpoints": vpc_endpoints,
+            "vpn_connections": vpn_connections
+        })
+    
+    elif service == "AWS WAF":
+        st.write("**WAF Configuration**")
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            web_acls = st.number_input(
+                "Web ACLs",
+                min_value=1,
+                max_value=100,
+                value=2,
+                key=f"{key_prefix}_web_acls"
+            )
+            
+            rules_per_acl = st.slider(
+                "Rules per Web ACL",
+                min_value=1,
+                max_value=150,
+                value=10,
+                key=f"{key_prefix}_rules"
+            )
+        
+        with col2:
+            requests_billion = st.slider(
+                "Monthly Requests (Billions)",
+                min_value=0.1,
+                max_value=100.0,
+                value=1.0,
+                step=0.1,
+                key=f"{key_prefix}_waf_requests"
+            )
+            
+            managed_rules = st.checkbox(
+                "Use AWS Managed Rules",
+                value=True,
+                key=f"{key_prefix}_managed_rules"
+            )
+        
+        config.update({
+            "web_acls": web_acls,
+            "rules_per_acl": rules_per_acl,
+            "requests_billion": requests_billion,
+            "managed_rules": managed_rules
+        })
+    
+    elif service == "Amazon SageMaker":
+        st.write("**SageMaker Configuration**")
+        
+        usage_type = st.selectbox(
+            "Primary Usage",
+            ["Training", "Inference", "Notebooks", "All"],
+            key=f"{key_prefix}_sagemaker_usage"
+        )
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            if usage_type in ["Training", "All"]:
+                training_hours = st.slider(
+                    "Training Hours/Month",
+                    min_value=10,
+                    max_value=1000,
+                    value=100,
+                    key=f"{key_prefix}_training_hours"
+                )
+                config["training_hours"] = training_hours
+            
+            if usage_type in ["Inference", "All"]:
+                inference_hours = st.slider(
+                    "Inference Hours/Month",
+                    min_value=100,
+                    max_value=10000,
+                    value=1000,
+                    key=f"{key_prefix}_inference_hours"
+                )
+                config["inference_hours"] = inference_hours
+        
+        with col2:
+            if usage_type in ["Notebooks", "All"]:
+                notebook_hours = st.slider(
+                    "Notebook Instance Hours/Month",
+                    min_value=10,
+                    max_value=500,
+                    value=160,
+                    key=f"{key_prefix}_notebook_hours"
+                )
+                config["notebook_hours"] = notebook_hours
+            
+            storage_gb = st.slider(
+                "Model/Data Storage (GB)",
+                min_value=10,
+                max_value=10000,
+                value=500,
+                key=f"{key_prefix}_sagemaker_storage"
+            )
+        
+        config.update({
+            "usage_type": usage_type,
+            "storage_gb": storage_gb
+        })
+    
+    elif service == "Amazon Bedrock":
+        st.write("**Bedrock Configuration**")
+        
+        model_family = st.selectbox(
+            "Primary Model Family",
+            ["Claude", "Jurassic", "Command", "Titan", "Multiple"],
+            key=f"{key_prefix}_model_family"
+        )
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            input_tokens_million = st.slider(
+                "Input Tokens/Month (Millions)",
+                min_value=1,
+                max_value=1000,
+                value=10,
+                key=f"{key_prefix}_input_tokens"
+            )
+            
+            output_tokens_million = st.slider(
+                "Output Tokens/Month (Millions)",
+                min_value=1,
+                max_value=1000,
+                value=5,
+                key=f"{key_prefix}_output_tokens"
+            )
+        
+        with col2:
+            custom_models = st.number_input(
+                "Custom Models",
+                min_value=0,
+                max_value=50,
+                value=0,
+                key=f"{key_prefix}_custom_models"
+            )
+            
+            fine_tuning_hours = st.slider(
+                "Fine-tuning Hours/Month",
+                min_value=0,
+                max_value=500,
+                value=0,
+                key=f"{key_prefix}_fine_tuning"
+            )
+        
+        config.update({
+            "model_family": model_family,
+            "input_tokens_million": input_tokens_million,
+            "output_tokens_million": output_tokens_million,
+            "custom_models": custom_models,
+            "fine_tuning_hours": fine_tuning_hours
+        })
+
+    # Region selection for all services
+    config["region"] = st.selectbox(
+        "Region",
+        ["us-east-1", "us-west-2", "eu-west-1", "ap-northeast-1", "ap-southeast-1"],
+        key=f"{key_prefix}_region"
+    )
+    
+    return config
+
+def render_yearly_visualization(yearly_data: Dict, service_name: str):
+    """Render yearly visualization for service costs using Streamlit native charts"""
+    if not yearly_data or "years" not in yearly_data or not yearly_data["years"]:
+        st.info(f"No yearly data available for {service_name}")
+        return
+    
+    # Display yearly breakdown table
+    st.subheader(f"📅 {service_name} - Yearly Cost Breakdown")
+    
+    # Create DataFrame for display
+    yearly_df = pd.DataFrame({
+        'Year': yearly_data["years"],
+        'Monthly Cost': [f'${cost:,.2f}' for cost in yearly_data["monthly_costs"]],
+        'Yearly Cost': [f'${cost:,.2f}' for cost in yearly_data["yearly_costs"]],
+        'Cumulative Cost': [f'${cost:,.2f}' for cost in yearly_data["cumulative_costs"]]
+    })
+    
+    # Display table
+    st.dataframe(yearly_df, use_container_width=True)
+    
+    # Display metrics with safe division
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.metric("Total Cost", f"${yearly_data['total_cost']:,.2f}")
+    with col2:
+        # Safe division - avoid division by zero
+        if len(yearly_data["years"]) > 0:
+            avg_yearly = yearly_data['total_cost'] / len(yearly_data["years"])
+            st.metric("Average Yearly", f"${avg_yearly:,.2f}")
+        else:
+            st.metric("Average Yearly", "$0.00")
+    with col3:
+        if yearly_data["yearly_costs"]:
+            st.metric("Final Yearly", f"${yearly_data['yearly_costs'][-1]:,.2f}")
+        else:
+            st.metric("Final Yearly", "$0.00")
+    
+    # Create simple bar chart using Streamlit
+    st.subheader("📊 Yearly Cost Chart")
+    chart_df = pd.DataFrame({
+        'Year': yearly_data["years"],
+        'Yearly Cost ($)': yearly_data["yearly_costs"]
+    })
+    st.bar_chart(chart_df.set_index('Year'))
 
 def main():
     st.set_page_config(
