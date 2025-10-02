@@ -10,6 +10,7 @@ import time
 import os
 import tempfile
 from pathlib import Path
+import diagrams
 
 # Try to import diagrams library for architecture generation
 try:
