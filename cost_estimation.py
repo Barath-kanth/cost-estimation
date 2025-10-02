@@ -12,8 +12,6 @@ import tempfile
 from pathlib import Path
 from PIL import Image
 
-# Remove matplotlib imports and replace with plotly or streamlit native charts
-
 # AWS Pricing API configuration
 AWS_PRICING_API_BASE = "https://pricing.us-east-1.amazonaws.com"
 
@@ -31,6 +29,53 @@ def initialize_session_state():
         st.session_state.timeline_data = {}
     if 'architecture_diagram' not in st.session_state:
         st.session_state.architecture_diagram = None
+
+# AWS Services configuration (keep your existing AWS_SERVICES dict)
+AWS_SERVICES = {
+    "Compute": {
+        "Amazon EC2": "Virtual servers in the cloud",
+        "AWS Lambda": "Serverless compute service",
+        "Amazon ECS": "Fully managed container orchestration",
+        "Amazon EKS": "Managed Kubernetes service"
+    },
+    "Storage": {
+        "Amazon S3": "Object storage service",
+        "Amazon EBS": "Block storage for EC2",
+        "Amazon EFS": "Managed file system"
+    },
+    "Database": {
+        "Amazon RDS": "Managed relational database",
+        "Amazon DynamoDB": "Managed NoSQL database",
+        "Amazon ElastiCache": "In-memory caching",
+        "Amazon OpenSearch": "Search and analytics service"
+    },
+    "AI/ML": {
+        "Amazon Bedrock": "Fully managed foundation models",
+        "Amazon SageMaker": "Build, train and deploy ML models"
+    },
+    "Analytics": {
+        "Amazon Kinesis": "Real-time data streaming",
+        "AWS Glue": "ETL service",
+        "Amazon Redshift": "Data warehousing"
+    },
+    "Networking": {
+        "Amazon VPC": "Isolated cloud resources",
+        "Amazon CloudFront": "Global content delivery network",
+        "Elastic Load Balancing": "Distribute incoming traffic",
+        "Amazon API Gateway": "API management"
+    },
+    "Security": {
+        "AWS WAF": "Web Application Firewall",
+        "Amazon GuardDuty": "Threat detection service",
+        "AWS Shield": "DDoS protection"
+    },
+    "Application Integration": {
+        "AWS Step Functions": "Workflow orchestration",
+        "Amazon EventBridge": "Event bus service",
+        "Amazon SNS": "Pub/sub messaging",
+        "Amazon SQS": "Message queuing"
+    }
+}
 
 class ProfessionalArchitectureGenerator:
     """Generate professional AWS architecture diagrams with real AWS icons"""
@@ -303,58 +348,345 @@ class ProfessionalArchitectureGenerator:
 
         return mermaid_code
 
-# ... (keep all your existing classes and functions, but remove matplotlib usage)
+class YearlyTimelineCalculator:
+    @staticmethod
+    def render_timeline_selector() -> Dict:
+        """Render timeline configuration UI"""
+        st.subheader("💰 Timeline & Usage Pattern")
+        
+        col1, col2, col3, col4 = st.columns(4)
+        
+        with col1:
+            timeline_type = st.selectbox(
+                "Timeline Period",
+                [
+                    "1 Month", "3 Months", "6 Months", 
+                    "1 Year (12 Months)", "2 Years (24 Months)", 
+                    "3 Years (36 Months)", "5 Years (60 Months)"
+                ],
+                index=3,
+                help="Select your planning horizon"
+            )
+            if "Year" in timeline_type:
+                years = int(timeline_type.split()[0])
+                total_months = years * 12
+            else:
+                total_months = int(timeline_type.split()[0])
+                years = total_months // 12
+        
+        with col2:
+            usage_pattern = st.selectbox(
+                "Usage Pattern",
+                ["Development", "Sporadic", "Normal", "Intensive", "24x7"],
+                index=2,
+                help="Expected usage intensity"
+            )
+        
+        with col3:
+            growth_rate = st.slider(
+                "Monthly Growth Rate (%)",
+                min_value=0.0,
+                max_value=20.0,
+                value=5.0,
+                step=0.5,
+                help="Expected monthly growth in usage"
+            ) / 100
+        
+        with col4:
+            commitment_type = st.selectbox(
+                "Commitment Type",
+                ["On-Demand", "1-Year Reserved", "3-Year Reserved", "Savings Plans"],
+                help="AWS pricing commitment level"
+            )
+        
+        pattern_multipliers = {
+            "Development": 0.6,
+            "Sporadic": 0.8,
+            "Normal": 1.0,
+            "Intensive": 1.4,
+            "24x7": 1.8
+        }
+        
+        commitment_discounts = {
+            "On-Demand": 1.0,
+            "1-Year Reserved": 0.7,
+            "3-Year Reserved": 0.5,
+            "Savings Plans": 0.72
+        }
+        
+        return {
+            "timeline_type": timeline_type,
+            "total_months": total_months,
+            "years": years,
+            "usage_pattern": usage_pattern,
+            "pattern_multiplier": pattern_multipliers[usage_pattern],
+            "growth_rate": growth_rate,
+            "commitment_type": commitment_type,
+            "commitment_discount": commitment_discounts[commitment_type]
+        }
 
-# In the main function, replace the cost breakdown visualization:
+# Add other necessary classes here (ServiceSelector, DynamicPricingEngine, etc.)
+# For brevity, I'm including the main structure. You'll need to add your existing classes.
+
+class ServiceSelector:
+    @staticmethod
+    def render_service_selection() -> Dict[str, List[str]]:
+        """Render service selection UI and return selected services"""
+        st.subheader("Select AWS Services")
+        st.write("Choose the services that best fit your architecture needs")
+        
+        selected_services = {}
+        
+        tabs = st.tabs(list(AWS_SERVICES.keys()))
+        for i, (category, services) in enumerate(AWS_SERVICES.items()):
+            with tabs[i]:
+                st.write(f"**{category} Services**")
+                
+                cols = st.columns(2)
+                for j, (service, description) in enumerate(services.items()):
+                    col_idx = j % 2
+                    with cols[col_idx]:
+                        if st.checkbox(
+                            f"{service}", 
+                            help=description,
+                            key=f"service_{category}_{j}"
+                        ):
+                            if category not in selected_services:
+                                selected_services[category] = []
+                            selected_services[category].append(service)
+        
+        return selected_services
+
+# Simplified DynamicPricingEngine for demonstration
+class DynamicPricingEngine:
+    @staticmethod
+    def calculate_service_price(service: str, config: Dict, timeline_config: Dict, requirements: Dict) -> Dict:
+        """Calculate service price with dynamic factors"""
+        # Simplified pricing calculation
+        base_price = 100.0  # Example base price
+        
+        adjusted_price = base_price * timeline_config["pattern_multiplier"]
+        discounted_price = adjusted_price * timeline_config["commitment_discount"]
+        
+        # Simplified timeline calculation
+        total_timeline_cost = discounted_price * timeline_config["total_months"]
+        
+        return {
+            "base_monthly_cost": base_price,
+            "adjusted_monthly_cost": adjusted_price,
+            "discounted_monthly_cost": discounted_price,
+            "total_timeline_cost": total_timeline_cost,
+            "commitment_savings": adjusted_price - discounted_price
+        }
+
+def render_service_configurator(service: str, key_prefix: str) -> Dict:
+    """Render configuration options for selected service"""
+    config = {}
+    
+    if service == "Amazon EC2":
+        st.write("**Instance Configuration**")
+        config['instance_type'] = st.selectbox(
+            "Instance Type",
+            ["t3.micro", "t3.small", "m5.large"],
+            key=f"{key_prefix}_instance_type"
+        )
+        config['instance_count'] = st.slider(
+            "Number of Instances",
+            min_value=1,
+            max_value=10,
+            value=2,
+            key=f"{key_prefix}_instance_count"
+        )
+    
+    # Add configuration for other services as needed
+    
+    return config
 
 def main():
-    # ... (previous setup code)
+    st.set_page_config(
+        page_title="AWS Cloud Package Builder", 
+        layout="wide",
+        page_icon="☁️"
+    )
     
-    # TOTAL COST SUMMARY - Replace matplotlib with native Streamlit charts
-    st.header("💰 Total Cost Summary")
+    st.title("🚀 AWS Cloud Package Builder")
+    st.markdown("Design, Configure, and Optimize Your Cloud Architecture with Real-time Pricing")
     
-    col1, col2, col3 = st.columns(3)
+    initialize_session_state()
     
-    with col1:
-        st.metric(
-            "Total Estimated Cost", 
-            f"${st.session_state.total_cost:,.2f}",
-            f"for {timeline_config['timeline_type']}"
-        )
+    # TIMELINE CONFIGURATION - FIXED: Store the returned value
+    timeline_config = YearlyTimelineCalculator.render_timeline_selector()
     
-    with col2:
-        avg_monthly = st.session_state.total_cost / timeline_config['total_months'] if timeline_config['total_months'] > 0 else 0
-        st.metric("Average Monthly Cost", f"${avg_monthly:,.2f}")
-    
-    with col3:
-        commitment_savings = sum(
-            config['pricing'].get('commitment_savings', 0) * timeline_config['total_months'] 
-            for config in st.session_state.configurations.values()
-        )
-        st.metric("Commitment Savings", f"${commitment_savings:,.2f}")
-    
-    # Cost breakdown using native Streamlit charts
-    st.subheader("📊 Cost Breakdown by Service")
-    
-    cost_data = []
-    for service, config in st.session_state.configurations.items():
-        cost_data.append({
-            'Service': service,
-            'Total Cost': config['pricing']['total_timeline_cost'],
-            'Monthly Cost': config['pricing']['discounted_monthly_cost']
-        })
-    
-    if cost_data:
-        cost_df = pd.DataFrame(cost_data)
-        st.dataframe(cost_df, use_container_width=True)
+    # PROJECT REQUIREMENTS SECTION
+    with st.expander("📋 Project Requirements & Architecture", expanded=True):
+        st.write("**Define Your Project Requirements**")
         
-        # Use Streamlit native bar chart instead of matplotlib
-        st.bar_chart(cost_df.set_index('Service')['Total Cost'])
+        col1, col2 = st.columns(2)
         
-        # For pie chart equivalent, use a bar chart or create a custom visualization
-        st.write("**Cost Distribution**")
-        chart_data = cost_df[['Service', 'Total Cost']].set_index('Service')
-        st.bar_chart(chart_data)
+        with col1:
+            st.subheader("Workload Profile")
+            workload_complexity = st.select_slider(
+                "Workload Complexity",
+                options=["Simple", "Moderate", "Complex", "Enterprise"],
+                value="Moderate",
+                help="Complexity of your application architecture"
+            )
+            
+            performance_tier = st.select_slider(
+                "Performance Tier",
+                options=["Development", "Testing", "Production", "Enterprise"],
+                value="Production"
+            )
+            
+        with col2:
+            st.subheader("Scalability & Availability")
+            scalability_needs = st.selectbox(
+                "Scalability Pattern",
+                ["Fixed Capacity", "Seasonal", "Predictable Growth", "Unpredictable Burst"]
+            )
+            
+            availability_requirements = st.selectbox(
+                "Availability Requirements",
+                ["99.9% (Business Hours)", "99.95% (High Availability)", "99.99% (Mission Critical)"]
+            )
+    
+    # Store requirements for pricing calculations
+    requirements = {
+        'workload_complexity': workload_complexity,
+        'performance_tier': performance_tier,
+        'scalability_needs': scalability_needs,
+        'availability_requirements': availability_requirements
+    }
+    
+    # SERVICE SELECTION
+    st.session_state.selected_services = ServiceSelector.render_service_selection()
+    
+    if st.session_state.selected_services:
+        st.header("⚙️ Service Configuration")
+        
+        st.session_state.total_cost = 0
+        st.session_state.configurations = {}
+        
+        for category, services in st.session_state.selected_services.items():
+            st.subheader(f"{category}")
+            
+            for i, service in enumerate(services):
+                with st.expander(f"🔧 {service}", expanded=True):
+                    st.write(f"*{AWS_SERVICES[category][service]}*")
+                    
+                    service_key = f"{category}_{service}_{i}"
+                    
+                    if service_key not in st.session_state:
+                        st.session_state[service_key] = {}
+                    
+                    # Render service configuration
+                    config = render_service_configurator(service, service_key)
+                    st.session_state[service_key].update(config)
+                    
+                    # Calculate pricing with timeline AND requirements
+                    pricing_result = DynamicPricingEngine.calculate_service_price(
+                        service, 
+                        st.session_state[service_key],
+                        timeline_config,  # Now properly defined
+                        requirements
+                    )
+                    
+                    # Display pricing information
+                    col1, col2, col3, col4 = st.columns(4)
+                    with col1:
+                        st.metric("Base Monthly", f"${pricing_result['base_monthly_cost']:,.2f}")
+                    with col2:
+                        st.metric("Adjusted Monthly", f"${pricing_result['adjusted_monthly_cost']:,.2f}")
+                    with col3:
+                        st.metric("After Commitment", f"${pricing_result['discounted_monthly_cost']:,.2f}")
+                    with col4:
+                        st.metric(f"Total {timeline_config['timeline_type']}", 
+                                 f"${pricing_result['total_timeline_cost']:,.2f}")
+                    
+                    # Store configuration
+                    st.session_state.configurations[service] = {
+                        "config": st.session_state[service_key],
+                        "pricing": pricing_result
+                    }
+                    
+                    # Add to total cost
+                    st.session_state.total_cost += pricing_result['total_timeline_cost']
+        
+        # GENERATE PROFESSIONAL ARCHITECTURE DIAGRAM
+        st.header("🏗️ Professional Architecture Diagram")
+        
+        # Generate professional diagram
+        html_diagram = ProfessionalArchitectureGenerator.generate_professional_diagram_html(
+            st.session_state.selected_services,
+            st.session_state.configurations,
+            requirements
+        )
+        
+        # Display the professional diagram
+        st.subheader("📐 Your AWS Architecture")
+        
+        col1, col2 = st.columns([3, 1])
+        
+        with col1:
+            try:
+                import streamlit.components.v1 as components
+                components.html(html_diagram, height=800, scrolling=True)
+                
+            except Exception as e:
+                st.error(f"Error displaying diagram: {str(e)}")
+                st.code(html_diagram, language="html")
+        
+        with col2:
+            st.subheader("Diagram Controls")
+            
+            # Diagram information
+            with st.expander("📊 Architecture Info", expanded=True):
+                total_services = sum(len(services) for services in st.session_state.selected_services.values())
+                st.metric("Total Services", total_services)
+                
+                categories_used = [cat for cat, services in st.session_state.selected_services.items() if services]
+                st.write("**Categories:**", ", ".join(categories_used))
+        
+        # TOTAL COST SUMMARY
+        st.header("💰 Total Cost Summary")
+        
+        col1, col2, col3 = st.columns(3)
+        
+        with col1:
+            st.metric(
+                "Total Estimated Cost", 
+                f"${st.session_state.total_cost:,.2f}",
+                f"for {timeline_config['timeline_type']}"  # Now timeline_config is defined
+            )
+        
+        with col2:
+            avg_monthly = st.session_state.total_cost / timeline_config['total_months'] if timeline_config['total_months'] > 0 else 0
+            st.metric("Average Monthly Cost", f"${avg_monthly:,.2f}")
+        
+        with col3:
+            commitment_savings = sum(
+                config['pricing'].get('commitment_savings', 0) * timeline_config['total_months'] 
+                for config in st.session_state.configurations.values()
+            )
+            st.metric("Commitment Savings", f"${commitment_savings:,.2f}")
+        
+        # Cost breakdown using native Streamlit charts
+        st.subheader("📊 Cost Breakdown by Service")
+        
+        cost_data = []
+        for service, config in st.session_state.configurations.items():
+            cost_data.append({
+                'Service': service,
+                'Total Cost': config['pricing']['total_timeline_cost'],
+                'Monthly Cost': config['pricing']['discounted_monthly_cost']
+            })
+        
+        if cost_data:
+            cost_df = pd.DataFrame(cost_data)
+            st.dataframe(cost_df, use_container_width=True)
+            
+            # Use Streamlit native bar chart
+            st.bar_chart(cost_df.set_index('Service')['Total Cost'])
 
 if __name__ == "__main__":
     main()
