@@ -10,7 +10,7 @@ import time
 import os
 import tempfile
 from pathlib import Path
-import diagrams
+from PIL import Image
 
 # Try to import diagrams library for architecture generation
 try:
@@ -1458,6 +1458,213 @@ class DynamicPricingEngine:
         # Add more services as needed...
         return 0.0
 
+class ArchitectureDiagramGenerator:
+    """Generate AWS architecture diagrams automatically"""
+    
+    # Map service names to diagram icons
+    SERVICE_ICON_MAP = {
+        "Amazon EC2": "EC2",
+        "AWS Lambda": "Lambda",
+        "Amazon ECS": "ECS",
+        "Amazon EKS": "EKS",
+        "Amazon S3": "S3",
+        "Amazon EBS": "EBS",
+        "Amazon EFS": "EFS",
+        "Amazon RDS": "RDS",
+        "Amazon DynamoDB": "Dynamodb",
+        "Amazon ElastiCache": "ElastiCache",
+        "Amazon Bedrock": "Bedrock",
+        "Amazon SageMaker": "Sagemaker",
+        "Amazon Comprehend": "Comprehend",
+        "Amazon VPC": "VPC",
+        "Amazon CloudFront": "CloudFront",
+        "Elastic Load Balancing": "ELB",
+        "AWS WAF": "WAF",
+        "Amazon GuardDuty": "GuardDuty",
+        "AWS Shield": "Shield"
+    }
+    
+    @staticmethod
+    def get_icon_class(service_name: str):
+        """Get the appropriate icon class for a service"""
+        icon_mapping = {
+            "EC2": EC2,
+            "Lambda": Lambda,
+            "ECS": ECS,
+            "EKS": EKS,
+            "S3": S3,
+            "EBS": EBS,
+            "EFS": EFS,
+            "RDS": RDS,
+            "Dynamodb": Dynamodb,
+            "ElastiCache": ElastiCache,
+            "Bedrock": Sagemaker,  # Using Sagemaker as placeholder
+            "Sagemaker": Sagemaker,
+            "Comprehend": Comprehend,
+            "VPC": VPC,
+            "CloudFront": CloudFront,
+            "ELB": ELB,
+            "WAF": WAF,
+            "GuardDuty": GuardDuty,
+            "Shield": Shield
+        }
+        
+        icon_name = ArchitectureDiagramGenerator.SERVICE_ICON_MAP.get(service_name)
+        return icon_mapping.get(icon_name, EC2)  # Default to EC2 if not found
+    
+    @staticmethod
+    def generate_architecture_diagram(selected_services: Dict, configurations: Dict) -> Optional[str]:
+        """Generate AWS architecture diagram based on selected services"""
+        if not DIAGRAMS_AVAILABLE:
+            st.warning("⚠️ Install 'diagrams' and 'graphviz' for automatic architecture generation")
+            st.code("pip install diagrams graphviz", language="bash")
+            return None
+        
+        try:
+            # Create temporary directory for diagram
+            temp_dir = tempfile.gettempdir()
+            diagram_path = os.path.join(temp_dir, "aws_architecture")
+            
+            # Remove old diagram if exists
+            if os.path.exists(f"{diagram_path}.png"):
+                os.remove(f"{diagram_path}.png")
+            
+            # Create diagram with custom attributes
+            with Diagram(
+                "AWS Cloud Architecture",
+                filename=diagram_path,
+                show=False,
+                direction="LR",
+                outformat="png",
+                graph_attr={
+                    "fontsize": "14",
+                    "bgcolor": "white",
+                    "pad": "0.5",
+                    "splines": "ortho",
+                    "nodesep": "0.8",
+                    "ranksep": "1.0"
+                }
+            ):
+                # Group services by category
+                service_nodes = {}
+                
+                for category, services in selected_services.items():
+                    if services:  # Only create cluster if there are services
+                        with Cluster(f"{category} Layer"):
+                            for service in services:
+                                icon_class = ArchitectureDiagramGenerator.get_icon_class(service)
+                                
+                                # Get configuration details if available
+                                config = configurations.get(service, {}).get('config', {})
+                                
+                                # Create label with key details
+                                label = service.replace("Amazon ", "").replace("AWS ", "")
+                                
+                                if service == "Amazon EC2" and config:
+                                    instance_count = config.get('instance_count', 1)
+                                    instance_type = config.get('instance_type', 't3.micro')
+                                    label = f"{label}\\n{instance_count}x {instance_type}"
+                                elif service == "Amazon RDS" and config:
+                                    instance_type = config.get('instance_type', 'db.t3.micro')
+                                    engine = config.get('engine', 'PostgreSQL')
+                                    label = f"{label}\\n{engine}\\n{instance_type}"
+                                elif service == "Amazon S3" and config:
+                                    storage_gb = config.get('storage_gb', 100)
+                                    label = f"{label}\\n{storage_gb}GB"
+                                elif service == "AWS Lambda" and config:
+                                    memory = config.get('memory_mb', 128)
+                                    label = f"{label}\\n{memory}MB"
+                                
+                                service_nodes[service] = icon_class(label)
+                
+                # Create logical connections between services
+                ArchitectureDiagramGenerator._create_service_connections(service_nodes, selected_services)
+            
+            # Return the path to generated diagram
+            diagram_file = f"{diagram_path}.png"
+            if os.path.exists(diagram_file):
+                return diagram_file
+            
+            return None
+            
+        except Exception as e:
+            st.error(f"Error generating architecture diagram: {str(e)}")
+            st.info("Make sure Graphviz is installed on your system: https://graphviz.org/download/")
+            return None
+    
+    @staticmethod
+    def _create_service_connections(service_nodes: Dict, selected_services: Dict):
+        """Create logical connections between AWS services"""
+        # Flatten services list
+        all_services = []
+        for services in selected_services.values():
+            all_services.extend(services)
+        
+        # Define common service connection patterns
+        connections = []
+        
+        # CloudFront -> S3
+        if "Amazon CloudFront" in all_services and "Amazon S3" in all_services:
+            connections.append(("Amazon CloudFront", "Amazon S3", "distributes"))
+        
+        # ELB -> EC2/ECS/EKS
+        if "Elastic Load Balancing" in all_services:
+            for compute in ["Amazon EC2", "Amazon ECS", "Amazon EKS"]:
+                if compute in all_services:
+                    connections.append(("Elastic Load Balancing", compute, "routes"))
+        
+        # EC2/ECS/Lambda -> RDS/DynamoDB
+        compute_services = ["Amazon EC2", "AWS Lambda", "Amazon ECS", "Amazon EKS"]
+        database_services = ["Amazon RDS", "Amazon DynamoDB"]
+        
+        for compute in compute_services:
+            if compute in all_services:
+                for db in database_services:
+                    if db in all_services:
+                        connections.append((compute, db, ""))
+                        break  # Only connect to one database
+        
+        # EC2 -> S3
+        if "Amazon EC2" in all_services and "Amazon S3" in all_services:
+            if ("Amazon EC2", "Amazon S3", "") not in [(c[0], c[1], "") for c in connections]:
+                connections.append(("Amazon EC2", "Amazon S3", ""))
+        
+        # Lambda -> S3
+        if "AWS Lambda" in all_services and "Amazon S3" in all_services:
+            connections.append(("AWS Lambda", "Amazon S3", ""))
+        
+        # WAF -> CloudFront/ELB
+        if "AWS WAF" in all_services:
+            for frontend in ["Amazon CloudFront", "Elastic Load Balancing"]:
+                if frontend in all_services:
+                    connections.append(("AWS WAF", frontend, "protects"))
+                    break
+        
+        # EC2 -> ElastiCache
+        if "Amazon EC2" in all_services and "Amazon ElastiCache" in all_services:
+            connections.append(("Amazon EC2", "Amazon ElastiCache", ""))
+        
+        # SageMaker/Bedrock -> S3
+        for ml_service in ["Amazon SageMaker", "Amazon Bedrock"]:
+            if ml_service in all_services and "Amazon S3" in all_services:
+                connections.append((ml_service, "Amazon S3", ""))
+        
+        # EBS -> EC2 (storage connection)
+        if "Amazon EBS" in all_services and "Amazon EC2" in all_services:
+            connections.append(("Amazon EC2", "Amazon EBS", ""))
+        
+        # VPC contains compute services (visual grouping noted)
+        # GuardDuty monitors (no direct connection needed)
+        
+        # Create edges with labels only for important connections
+        for source, target, label in connections:
+            if source in service_nodes and target in service_nodes:
+                if label:
+                    service_nodes[source] >> Edge(label=label, style="bold", color="blue") >> service_nodes[target]
+                else:
+                    service_nodes[source] >> service_nodes[target]
+
+
 def main():
     st.set_page_config(
         page_title="AWS Cloud Package Builder", 
@@ -1469,6 +1676,54 @@ def main():
     st.markdown("Design, Configure, and Optimize Your Cloud Architecture with Real-time Pricing")
     
     initialize_session_state()
+
+    if st.session_state.selected_services and st.session_state.configurations:
+            st.header("🏗️ Architecture Diagram")
+            
+            col1, col2 = st.columns([3, 1])
+            
+            with col2:
+                if st.button("🔄 Generate Architecture Diagram", type="primary", use_container_width=True):
+                    with st.spinner("Generating architecture diagram..."):
+                        diagram_path = ArchitectureDiagramGenerator.generate_architecture_diagram(
+                            st.session_state.selected_services,
+                            st.session_state.configurations
+                        )
+                        
+                        if diagram_path:
+                            st.session_state.architecture_diagram = diagram_path
+                            st.success("✅ Architecture diagram generated!")
+                        else:
+                            st.error("Failed to generate diagram. Make sure 'diagrams' and 'graphviz' are installed.")
+            
+            with col1:
+                if DIAGRAMS_AVAILABLE:
+                    st.info("📊 Click 'Generate Architecture Diagram' to visualize your AWS architecture")
+                else:
+                    st.warning("⚠️ Install required packages to enable architecture diagram generation:")
+                    st.code("pip install diagrams graphviz", language="bash")
+                    st.markdown("Also install Graphviz system package: [Download Here](https://graphviz.org/download/)")
+            
+            # Display the diagram if it exists
+            if st.session_state.architecture_diagram and os.path.exists(st.session_state.architecture_diagram):
+                st.subheader("📐 Your AWS Architecture")
+                
+                try:
+                    image = Image.open(st.session_state.architecture_diagram)
+                    st.image(image, caption="AWS Cloud Architecture Diagram", use_container_width=True)
+                    
+                    # Download button for diagram
+                    with open(st.session_state.architecture_diagram, "rb") as file:
+                        st.download_button(
+                            label="📥 Download Architecture Diagram",
+                            data=file,
+                            file_name=f"aws_architecture_{datetime.now().strftime('%Y%m%d_%H%M%S')}.png",
+                            mime="image/png"
+                        )
+                except Exception as e:
+                    st.error(f"Error displaying diagram: {str(e)}")
+            
+            st.markdown("---")
     
     # TIMELINE CONFIGURATION
     timeline_config = YearlyTimelineCalculator.render_timeline_selector()
