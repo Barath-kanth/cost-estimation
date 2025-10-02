@@ -776,9 +776,6 @@ Based on the {requirements.get('performance_tier', 'Production')} tier and {requ
         else:
             st.success("✓ Architecture looks well-balanced!")
 
-# [Rest of your existing classes and functions remain unchanged...]
-# ServiceSelector, YearlyTimelineCalculator, DynamicPricingEngine, etc.
-
 class ServiceSelector:
     @staticmethod
     def render_service_selection() -> Dict[str, List[str]]:
@@ -941,8 +938,1017 @@ class YearlyTimelineCalculator:
             "commitment_discount": commitment_discounts[commitment_type]
         }
 
-# [Rest of your existing DynamicPricingEngine class and other functions...]
-# Due to character limits, I'm showing the integration point
+class DynamicPricingEngine:
+    @staticmethod
+    def calculate_service_price(service: str, config: Dict, timeline_config: Dict, requirements: Dict) -> Dict:
+        """Calculate service price with dynamic factors, timeline, and enterprise requirements"""
+        
+        # Apply enterprise requirements to configuration
+        config = DynamicPricingEngine._apply_enterprise_requirements(config, service, requirements)
+        
+        base_price = DynamicPricingEngine._calculate_base_price(service, config, requirements)
+        
+        # Apply scalability pattern adjustments
+        scalability_multiplier = DynamicPricingEngine._get_scalability_multiplier(
+            requirements.get('scalability_needs', 'Fixed Capacity')
+        )
+        
+        # Apply availability requirements
+        availability_multiplier = DynamicPricingEngine._get_availability_multiplier(
+            requirements.get('availability_requirements', '99.9% (Business Hours)')
+        )
+        
+        adjusted_price = base_price * timeline_config["pattern_multiplier"] * scalability_multiplier * availability_multiplier
+        discounted_price = adjusted_price * timeline_config["commitment_discount"]
+        
+        if timeline_config["years"] > 0:
+            yearly_data = YearlyTimelineCalculator.calculate_yearly_costs(
+                discounted_price, 
+                timeline_config["years"],
+                timeline_config["growth_rate"]
+            )
+        else:
+            yearly_data = {"years": [], "yearly_costs": [], "monthly_costs": [], "cumulative_costs": [], "total_cost": 0.0}
+        
+        if timeline_config["total_months"] > 0:
+            monthly_data = YearlyTimelineCalculator.calculate_detailed_monthly_timeline(
+                discounted_price,
+                timeline_config["total_months"],
+                timeline_config["growth_rate"]
+            )
+        else:
+            monthly_data = {"months": [], "monthly_costs": [], "cumulative_costs": [], "total_cost": 0.0}
+        
+        return {
+            "base_monthly_cost": base_price,
+            "adjusted_monthly_cost": adjusted_price,
+            "discounted_monthly_cost": discounted_price,
+            "yearly_data": yearly_data,
+            "monthly_data": monthly_data,
+            "total_timeline_cost": monthly_data["total_cost"],
+            "commitment_savings": adjusted_price - discounted_price,
+            "scalability_multiplier": scalability_multiplier,
+            "availability_multiplier": availability_multiplier
+        }
+    
+    @staticmethod
+    def _apply_enterprise_requirements(config: Dict, service: str, requirements: Dict) -> Dict:
+        """Apply enterprise defaults based on requirements"""
+        performance_tier = requirements.get('performance_tier', 'Production')
+        workload_complexity = requirements.get('workload_complexity', 'Moderate')
+        
+        # Only apply enterprise defaults if performance tier is Enterprise
+        if performance_tier != 'Enterprise':
+            return config
+        
+        # Enterprise defaults for different services
+        if service == "Amazon EC2":
+            if 'instance_type' not in config or config['instance_type'] in ['t3.micro', 't3.small']:
+                config['instance_type'] = 'm5.xlarge'  # Enterprise default
+            if 'instance_count' not in config or config['instance_count'] < 2:
+                config['instance_count'] = 2  # Minimum 2 for HA
+        
+        elif service == "Amazon RDS":
+            if 'instance_type' not in config or config['instance_type'] in ['db.t3.micro', 'db.t3.small']:
+                config['instance_type'] = 'db.m5.xlarge'  # Enterprise default
+            config['multi_az'] = True  # Enterprise enables Multi-AZ by default
+            config['backup_retention'] = 35  # Longer retention for enterprise
+            if 'storage_gb' not in config or config['storage_gb'] < 100:
+                config['storage_gb'] = 100
+        
+        elif service == "Amazon EBS":
+            if config.get('volume_type', 'gp3') == 'gp3':
+                config['volume_type'] = 'io1'  # Provisioned IOPS for enterprise
+                config['iops'] = 3000
+        
+        elif service == "Amazon ECS":
+            if config.get('cluster_type', 'Fargate') == 'Fargate':
+                config['cpu_units'] = max(config.get('cpu_units', 1024), 2048)
+                config['memory_gb'] = max(config.get('memory_gb', 2), 4)
+        
+        elif service == "Elastic Load Balancing":
+            # Enterprise might need more capacity
+            config['lcu_count'] = config.get('lcu_count', 10000) * 2
+        
+        return config
+    
+    @staticmethod
+    def _get_scalability_multiplier(scalability_pattern: str) -> float:
+        """Get cost multiplier based on scalability pattern"""
+        multipliers = {
+            "Fixed Capacity": 1.0,
+            "Seasonal": 1.3,  # Higher for seasonal scaling needs
+            "Predictable Growth": 1.1,
+            "Unpredictable Burst": 1.5  # Highest for unpredictable bursts
+        }
+        return multipliers.get(scalability_pattern, 1.0)
+    
+    @staticmethod
+    def _get_availability_multiplier(availability: str) -> float:
+        """Get cost multiplier based on availability requirements"""
+        multipliers = {
+            "99.9% (Business Hours)": 1.0,
+            "99.95% (High Availability)": 1.3,
+            "99.99% (Mission Critical)": 1.8
+        }
+        return multipliers.get(availability, 1.0)
+    
+    @staticmethod
+    def _calculate_base_price(service: str, config: Dict, requirements: Dict) -> float:
+        """Calculate base monthly price for service with enterprise considerations"""
+        
+        performance_tier = requirements.get('performance_tier', 'Production')
+        
+        if service == "Amazon EC2":
+            instance_type = config.get('instance_type', 't3.micro')
+            instance_count = config.get('instance_count', 1)
+            
+            # Different pricing tiers based on performance requirements
+            if performance_tier == 'Enterprise':
+                instance_prices = {
+                    't3.micro': 0.0104, 't3.small': 0.0208, 't3.medium': 0.0416,
+                    'm5.large': 0.096, 'm5.xlarge': 0.192, 'm5.2xlarge': 0.384,
+                    'c5.large': 0.085, 'c5.xlarge': 0.17, 'c5.2xlarge': 0.34,
+                    'r5.large': 0.126, 'r5.xlarge': 0.252, 'r5.2xlarge': 0.504
+                }
+            else:
+                instance_prices = {
+                    't3.micro': 0.0104, 't3.small': 0.0208, 't3.medium': 0.0416,
+                    'm5.large': 0.096, 'm5.xlarge': 0.192,
+                    'c5.large': 0.085, 'c5.xlarge': 0.17,
+                    'r5.large': 0.126, 'r5.xlarge': 0.252
+                }
+            
+            base_price = instance_prices.get(instance_type, 0.1) * 730 * instance_count
+            
+            storage_gb = config.get('storage_gb', 30)
+            volume_type = config.get('volume_type', 'gp3')
+            storage_price_per_gb = {
+                'gp3': 0.08, 'gp2': 0.10, 'io1': 0.125, 'io2': 0.125,
+                'st1': 0.045, 'sc1': 0.015
+            }
+            base_price += storage_gb * storage_price_per_gb.get(volume_type, 0.08)
+            
+            # Add provisioned IOPS cost if applicable
+            if volume_type in ['io1', 'io2']:
+                iops = config.get('iops', 3000)
+                base_price += iops * 0.065  # $0.065 per provisioned IOPS
+            
+            return base_price
+            
+        elif service == "Amazon RDS":
+            instance_type = config.get('instance_type', 'db.t3.micro')
+            engine = config.get('engine', 'PostgreSQL')
+            
+            # RDS instance pricing with enterprise considerations
+            if performance_tier == 'Enterprise':
+                rds_prices = {
+                    'db.t3.micro': 0.017, 'db.t3.small': 0.034, 'db.t3.medium': 0.068,
+                    'db.m5.large': 0.17, 'db.m5.xlarge': 0.34, 'db.m5.2xlarge': 0.68,
+                    'db.r5.large': 0.24, 'db.r5.xlarge': 0.48, 'db.r5.2xlarge': 0.96
+                }
+            else:
+                rds_prices = {
+                    'db.t3.micro': 0.017, 'db.t3.small': 0.034, 'db.t3.medium': 0.068,
+                    'db.m5.large': 0.17, 'db.m5.xlarge': 0.34,
+                    'db.r5.large': 0.24, 'db.r5.xlarge': 0.48
+                }
+            
+            # Engine-specific adjustments
+            engine_multipliers = {
+                'PostgreSQL': 1.0,
+                'MySQL': 1.0,
+                'Aurora MySQL': 1.2,
+                'SQL Server': 1.5
+            }
+            
+            base_price = rds_prices.get(instance_type, 0.1) * 730 * engine_multipliers.get(engine, 1.0)
+            
+            # Storage costs
+            storage_gb = config.get('storage_gb', 20)
+            
+            # Use provisioned IOPS storage for enterprise
+            if performance_tier == 'Enterprise':
+                base_price += storage_gb * 0.25  # Higher cost for provisioned IOPS
+                # Add provisioned IOPS cost
+                iops = config.get('iops', 1000)
+                base_price += iops * 0.10  # $0.10 per provisioned IOPS
+            else:
+                base_price += storage_gb * 0.115  # $0.115 per GB-month for standard
+            
+            # Backup storage with longer retention for enterprise
+            backup_retention = config.get('backup_retention', 7)
+            backup_multiplier = 2.0 if backup_retention > 7 else 1.0  # More backups cost more
+            base_price += storage_gb * 0.095 * backup_multiplier
+            
+            # Multi-AZ multiplier
+            if config.get('multi_az', False):
+                base_price *= 2
+            
+            return base_price
+            
+        elif service == "Amazon S3":
+            storage_gb = config.get('storage_gb', 100)
+            storage_class = config.get('storage_class', 'Standard')
+            
+            storage_prices = {
+                'Standard': 0.023, 'Intelligent-Tiering': 0.0125,
+                'Standard-IA': 0.0125, 'One Zone-IA': 0.01,
+                'Glacier': 0.004, 'Glacier Deep Archive': 0.00099
+            }
+            
+            return storage_gb * storage_prices.get(storage_class, 0.023)
+            
+        elif service == "AWS Lambda":
+            memory_mb = config.get('memory_mb', 128)
+            requests = config.get('requests_per_month', 1000000)
+            duration_ms = config.get('avg_duration_ms', 100)
+            
+            # Lambda pricing calculation
+            request_cost = requests * 0.0000002  # $0.20 per 1M requests
+            gb_seconds = (requests * duration_ms * memory_mb) / (1000 * 1024)
+            compute_cost = gb_seconds * 0.0000166667  # $0.0000166667 per GB-second
+            
+            return request_cost + compute_cost
+            
+        elif service == "Amazon ECS":
+            cluster_type = config.get('cluster_type', 'Fargate')
+            
+            if cluster_type == 'Fargate':
+                cpu_units = config.get('cpu_units', 1024)
+                memory_gb = config.get('memory_gb', 2)
+                service_count = config.get('service_count', 3)
+                avg_tasks = config.get('avg_tasks_per_service', 2)
+                
+                # Fargate pricing per vCPU and GB
+                cpu_price_per_hour = 0.04048  # per vCPU per hour
+                memory_price_per_hour = 0.004445  # per GB per hour
+                
+                total_tasks = service_count * avg_tasks
+                monthly_cost = total_tasks * 730 * (cpu_units/1024 * cpu_price_per_hour + memory_gb * memory_price_per_hour)
+                return monthly_cost
+            else:
+                # EC2-based ECS pricing
+                instance_count = config.get('instance_count', 2)
+                instance_type = config.get('ecs_instance_type', 't3.medium')
+                
+                # Use EC2 pricing for the instances
+                ec2_prices = {
+                    't3.medium': 0.0416, 'm5.large': 0.096, 'm5.xlarge': 0.192
+                }
+                
+                base_price = ec2_prices.get(instance_type, 0.1) * 730 * instance_count
+                return base_price
+            
+        elif service == "Amazon EKS":
+            node_count = config.get('node_count', 2)
+            node_type = config.get('node_type', 't3.medium')
+            managed_node_groups = config.get('managed_node_groups', 1)
+            
+            # EKS cluster cost ($0.10 per hour)
+            eks_cluster_cost = 0.10 * 730
+            
+            # Node instance costs
+            node_prices = {
+                't3.medium': 0.0416, 'm5.large': 0.096, 'm5.xlarge': 0.192,
+                'c5.large': 0.085, 'r5.large': 0.126
+            }
+            
+            node_cost = node_prices.get(node_type, 0.1) * 730 * node_count
+            
+            return eks_cluster_cost + node_cost
+            
+        elif service == "Amazon EBS":
+            storage_gb = config.get('storage_gb', 30)
+            volume_type = config.get('volume_type', 'gp3')
+            iops = config.get('iops', 3000) if volume_type in ['io1', 'io2'] else 0
+            
+            storage_price_per_gb = {
+                'gp3': 0.08, 'gp2': 0.10, 'io1': 0.125, 'io2': 0.125,
+                'st1': 0.045, 'sc1': 0.015
+            }
+            
+            base_price = storage_gb * storage_price_per_gb.get(volume_type, 0.08)
+            
+            # Add IOPS cost for provisioned IOPS volumes
+            if volume_type in ['io1', 'io2']:
+                base_price += iops * 0.065  # $0.065 per provisioned IOPS
+            
+            return base_price
+            
+        elif service == "Amazon EFS":
+            storage_gb = config.get('storage_gb', 100)
+            storage_class = config.get('storage_class', 'Standard')
+            
+            efs_prices = {
+                'Standard': 0.30,  # $0.30 per GB-month
+                'Infrequent Access': 0.025  # $0.025 per GB-month
+            }
+            
+            return storage_gb * efs_prices.get(storage_class, 0.30)
+            
+        elif service == "Amazon ElastiCache":
+            node_type = config.get('node_type', 'cache.t3.micro')
+            node_count = config.get('node_count', 1)
+            engine = config.get('engine', 'Redis')
+            
+            cache_prices = {
+                'cache.t3.micro': 0.020, 'cache.t3.small': 0.038, 'cache.t3.medium': 0.076,
+                'cache.m5.large': 0.171, 'cache.r5.large': 0.242
+            }
+            
+            base_price = cache_prices.get(node_type, 0.1) * 730 * node_count
+            
+            # Engine multiplier
+            if engine == 'Memcached':
+                base_price *= 0.9  # Memcached is slightly cheaper
+            
+            return base_price
+            
+        elif service == "Amazon CloudFront":
+            data_transfer_tb = config.get('data_transfer_tb', 50)
+            requests_million = config.get('requests_million', 10)
+            
+            # Data transfer pricing (per GB)
+            data_transfer_cost = data_transfer_tb * 1024 * 0.085  # $0.085 per GB
+            
+            # Request pricing (per 10,000 requests)
+            request_cost = requests_million * 100 * 0.0075  # $0.0075 per 10,000 requests
+            
+            return data_transfer_cost + request_cost
+            
+        elif service == "Elastic Load Balancing":
+            lb_type = config.get('lb_type', 'Application Load Balancer')
+            lcu_count = config.get('lcu_count', 10000)
+            data_processed_tb = config.get('data_processed_tb', 10)
+            
+            if lb_type == 'Application Load Balancer':
+                # ALB pricing: $0.0225 per ALB-hour + $0.008 per LCU-hour
+                alb_hourly = 0.0225 * 730  # $0.0225 per hour
+                lcu_cost = lcu_count * 0.008  # $0.008 per LCU-hour
+                return alb_hourly + lcu_cost
+            else:
+                # NLB pricing: $0.0225 per NLB-hour + $0.006 per NLCU-hour
+                nlb_hourly = 0.0225 * 730  # $0.0225 per hour
+                nlcu_cost = lcu_count * 0.006  # $0.006 per NLCU-hour
+                return nlb_hourly + nlcu_cost
+            
+        elif service == "Amazon VPC":
+            vpc_count = config.get('vpc_count', 1)
+            nat_gateways = config.get('nat_gateways', 2)
+            vpc_endpoints = config.get('vpc_endpoints', 5)
+            vpn_connections = config.get('vpn_connections', 0)
+            
+            # VPC is free, but associated services have costs
+            nat_cost = nat_gateways * 0.045 * 730  # $0.045 per NAT Gateway-hour
+            endpoint_cost = vpc_endpoints * 0.01 * 730  # $0.01 per endpoint-hour
+            vpn_cost = vpn_connections * 0.05 * 730  # $0.05 per VPN connection-hour
+            
+            return nat_cost + endpoint_cost + vpn_cost
+            
+        elif service == "AWS WAF":
+            web_acls = config.get('web_acls', 2)
+            rules_per_acl = config.get('rules_per_acl', 10)
+            requests_billion = config.get('requests_billion', 1.0)
+            managed_rules = config.get('managed_rules', True)
+            
+            web_acl_cost = web_acls * 5.00  # $5.00 per web ACL per month
+            rule_cost = web_acls * rules_per_acl * 1.00  # $1.00 per rule per month
+            request_cost = requests_billion * 0.60  # $0.60 per million requests
+            managed_rule_cost = web_acls * 1.00 if managed_rules else 0  # $1.00 per managed rule set
+            
+            return web_acl_cost + rule_cost + request_cost + managed_rule_cost
+            
+        elif service == "AWS Shield":
+            protection_level = config.get('protection_level', 'Standard')
+            protected_resources = config.get('protected_resources', 5)
+            
+            if protection_level == 'Standard':
+                # Shield Standard is free
+                return 0
+            else:
+                # Shield Advanced: $3000 per month + $XXX per protected resource
+                shield_advanced_cost = 3000  # $3000 per month
+                resource_cost = protected_resources * 100  # $100 per protected resource
+                return shield_advanced_cost + resource_cost
+            
+        elif service == "Amazon GuardDuty":
+            data_sources = config.get('data_sources', ['CloudTrail', 'VPC', 'DNS'])
+            protected_accounts = config.get('protected_accounts', 1)
+            
+            # GuardDuty pricing per GB of data analyzed
+            cloudtrail_cost = 1.00 if 'CloudTrail' in data_sources else 0  # $1.00 per GB
+            vpc_cost = 0.50 if 'VPC' in data_sources else 0  # $0.50 per GB
+            dns_cost = 0.50 if 'DNS' in data_sources else 0  # $0.50 per GB
+            
+            # Estimate data volumes (simplified)
+            estimated_data_gb = 100  # Simplified estimate
+            
+            base_cost = (cloudtrail_cost + vpc_cost + dns_cost) * estimated_data_gb
+            
+            # Multi-account multiplier
+            if protected_accounts > 1:
+                base_cost *= protected_accounts * 0.8  # Volume discount
+            
+            return base_cost
+            
+        elif service == "Amazon SageMaker":
+            usage_type = config.get('usage_type', 'Training')
+            training_hours = config.get('training_hours', 100)
+            inference_hours = config.get('inference_hours', 1000)
+            notebook_hours = config.get('notebook_hours', 160)
+            storage_gb = config.get('storage_gb', 500)
+            
+            base_cost = 0
+            
+            if usage_type in ['Training', 'All']:
+                # ml.m5.xlarge instance: $0.269 per hour
+                base_cost += training_hours * 0.269
+            
+            if usage_type in ['Inference', 'All']:
+                # ml.m5.large instance: $0.134 per hour
+                base_cost += inference_hours * 0.134
+            
+            if usage_type in ['Notebooks', 'All']:
+                # ml.t3.medium instance: $0.0582 per hour
+                base_cost += notebook_hours * 0.0582
+            
+            # EBS storage for models and data
+            base_cost += storage_gb * 0.23  # $0.23 per GB-month
+            
+            return base_cost
+            
+        elif service == "Amazon Bedrock":
+            input_tokens_million = config.get('input_tokens_million', 10)
+            output_tokens_million = config.get('output_tokens_million', 5)
+            custom_models = config.get('custom_models', 0)
+            fine_tuning_hours = config.get('fine_tuning_hours', 0)
+            
+            # Claude model pricing (example)
+            input_cost = input_tokens_million * 0.80  # $0.80 per million input tokens
+            output_cost = output_tokens_million * 4.00  # $4.00 per million output tokens
+            custom_model_cost = custom_models * 100  # $100 per custom model per month
+            fine_tuning_cost = fine_tuning_hours * 50  # $50 per fine-tuning hour
+            
+            return input_cost + output_cost + custom_model_cost + fine_tuning_cost
+        
+        # Default case for services without specific pricing
+        return 0.0
+
+def render_service_configurator(service: str, key_prefix: str) -> Dict:
+    """Render configuration options for selected service"""
+    config = {}
+    
+    if service == "Amazon EC2":
+        st.write("**Instance Configuration**")
+        
+        instance_families = {
+            "General Purpose": {
+                "t3.micro": {"vCPU": 2, "Memory": 1, "Description": "Burstable, low cost"},
+                "t3.small": {"vCPU": 2, "Memory": 2, "Description": "Burstable, small workloads"},
+                "t3.medium": {"vCPU": 2, "Memory": 4, "Description": "Burstable, medium workloads"},
+                "m5.large": {"vCPU": 2, "Memory": 8, "Description": "General purpose, balanced"},
+                "m5.xlarge": {"vCPU": 4, "Memory": 16, "Description": "General purpose, high performance"}
+            },
+            "Compute Optimized": {
+                "c5.large": {"vCPU": 2, "Memory": 4, "Description": "Compute intensive workloads"},
+                "c5.xlarge": {"vCPU": 4, "Memory": 8, "Description": "High performance compute"}
+            },
+            "Memory Optimized": {
+                "r5.large": {"vCPU": 2, "Memory": 16, "Description": "Memory intensive applications"},
+                "r5.xlarge": {"vCPU": 4, "Memory": 32, "Description": "High memory workloads"}
+            }
+        }
+        
+        selected_family = st.selectbox(
+            "Instance Family",
+            list(instance_families.keys()),
+            key=f"{key_prefix}_family"
+        )
+        
+        if selected_family:
+            instance_options = instance_families[selected_family]
+            selected_instance = st.selectbox(
+                "Instance Type",
+                list(instance_options.keys()),
+                format_func=lambda x: f"{x} ({instance_options[x]['vCPU']} vCPU, {instance_options[x]['Memory']}GB) - {instance_options[x]['Description']}",
+                key=f"{key_prefix}_instance_type"
+            )
+            config['instance_type'] = selected_instance
+            
+            config['instance_count'] = st.slider(
+                "Number of Instances",
+                min_value=1,
+                max_value=20,
+                value=2,
+                key=f"{key_prefix}_instance_count"
+            )
+            
+            st.write("**Storage Configuration**")
+            config['storage_gb'] = st.slider(
+                "Storage (GB)",
+                min_value=20,
+                max_value=1000,
+                value=100,
+                step=10,
+                key=f"{key_prefix}_storage_gb"
+            )
+            
+            config['volume_type'] = st.selectbox(
+                "Volume Type",
+                ["gp3", "gp2", "io1", "io2", "st1", "sc1"],
+                index=0,
+                key=f"{key_prefix}_volume_type"
+            )
+            
+            if config['volume_type'] in ['io1', 'io2']:
+                config['iops'] = st.slider(
+                    "Provisioned IOPS",
+                    min_value=100,
+                    max_value=16000,
+                    value=3000,
+                    step=100,
+                    key=f"{key_prefix}_iops"
+                )
+    
+    elif service == "Amazon RDS":
+        st.write("**Database Configuration**")
+        
+        config['engine'] = st.selectbox(
+            "Database Engine",
+            ["PostgreSQL", "MySQL", "Aurora MySQL", "SQL Server"],
+            key=f"{key_prefix}_engine"
+        )
+        
+        instance_types = {
+            "db.t3.micro": "Burstable micro instance",
+            "db.t3.small": "Burstable small instance", 
+            "db.t3.medium": "Burstable medium instance",
+            "db.m5.large": "General purpose large",
+            "db.m5.xlarge": "General purpose xlarge",
+            "db.r5.large": "Memory optimized large"
+        }
+        
+        config['instance_type'] = st.selectbox(
+            "Instance Type",
+            list(instance_types.keys()),
+            format_func=lambda x: f"{x} - {instance_types[x]}",
+            key=f"{key_prefix}_rds_instance"
+        )
+        
+        config['storage_gb'] = st.slider(
+            "Storage (GB)",
+            min_value=20,
+            max_value=1000,
+            value=100,
+            key=f"{key_prefix}_rds_storage"
+        )
+        
+        config['multi_az'] = st.checkbox(
+            "Multi-AZ Deployment",
+            value=False,
+            key=f"{key_prefix}_multi_az"
+        )
+        
+        config['backup_retention'] = st.slider(
+            "Backup Retention (days)",
+            min_value=1,
+            max_value=35,
+            value=7,
+            key=f"{key_prefix}_backup_retention"
+        )
+    
+    elif service == "Amazon S3":
+        st.write("**Storage Configuration**")
+        
+        config['storage_gb'] = st.slider(
+            "Storage Capacity (GB)",
+            min_value=10,
+            max_value=10000,
+            value=1000,
+            step=10,
+            key=f"{key_prefix}_s3_storage"
+        )
+        
+        config['storage_class'] = st.selectbox(
+            "Storage Class",
+            ["Standard", "Intelligent-Tiering", "Standard-IA", "One Zone-IA", "Glacier", "Glacier Deep Archive"],
+            key=f"{key_prefix}_storage_class"
+        )
+    
+    elif service == "AWS Lambda":
+        st.write("**Function Configuration**")
+        
+        config['memory_mb'] = st.slider(
+            "Memory (MB)",
+            min_value=128,
+            max_value=10240,
+            value=512,
+            step=128,
+            key=f"{key_prefix}_memory"
+        )
+        
+        config['requests_per_month'] = st.slider(
+            "Monthly Requests",
+            min_value=100000,
+            max_value=10000000,
+            value=1000000,
+            step=100000,
+            key=f"{key_prefix}_requests"
+        )
+        
+        config['avg_duration_ms'] = st.slider(
+            "Average Duration (ms)",
+            min_value=50,
+            max_value=10000,
+            value=200,
+            step=50,
+            key=f"{key_prefix}_duration"
+        )
+    
+    elif service == "Amazon ECS":
+        st.write("**Container Configuration**")
+        
+        config['cluster_type'] = st.selectbox(
+            "Cluster Type",
+            ["Fargate", "EC2"],
+            key=f"{key_prefix}_cluster_type"
+        )
+        
+        if config['cluster_type'] == 'Fargate':
+            config['cpu_units'] = st.selectbox(
+                "CPU Units",
+                [256, 512, 1024, 2048, 4096],
+                index=2,
+                key=f"{key_prefix}_cpu_units"
+            )
+            
+            config['memory_gb'] = st.selectbox(
+                "Memory (GB)",
+                [0.5, 1, 2, 4, 8, 16],
+                index=2,
+                key=f"{key_prefix}_memory_gb"
+            )
+            
+            config['service_count'] = st.slider(
+                "Number of Services",
+                min_value=1,
+                max_value=20,
+                value=3,
+                key=f"{key_prefix}_service_count"
+            )
+            
+            config['avg_tasks_per_service'] = st.slider(
+                "Average Tasks per Service",
+                min_value=1,
+                max_value=10,
+                value=2,
+                key=f"{key_prefix}_tasks_per_service"
+            )
+        else:
+            config['instance_count'] = st.slider(
+                "Number of EC2 Instances",
+                min_value=1,
+                max_value=10,
+                value=2,
+                key=f"{key_prefix}_ecs_instances"
+            )
+            
+            config['ecs_instance_type'] = st.selectbox(
+                "Instance Type",
+                ["t3.medium", "m5.large", "m5.xlarge"],
+                key=f"{key_prefix}_ecs_instance_type"
+            )
+    
+    elif service == "Amazon EKS":
+        st.write("**Kubernetes Configuration**")
+        
+        config['node_count'] = st.slider(
+            "Number of Nodes",
+            min_value=1,
+            max_value=20,
+            value=3,
+            key=f"{key_prefix}_node_count"
+        )
+        
+        config['node_type'] = st.selectbox(
+            "Node Instance Type",
+            ["t3.medium", "m5.large", "m5.xlarge", "c5.large", "r5.large"],
+            key=f"{key_prefix}_node_type"
+        )
+        
+        config['managed_node_groups'] = st.slider(
+            "Managed Node Groups",
+            min_value=1,
+            max_value=5,
+            value=1,
+            key=f"{key_prefix}_node_groups"
+        )
+    
+    elif service == "Amazon EBS":
+        st.write("**Volume Configuration**")
+        
+        config['storage_gb'] = st.slider(
+            "Volume Size (GB)",
+            min_value=1,
+            max_value=1000,
+            value=100,
+            key=f"{key_prefix}_ebs_size"
+        )
+        
+        config['volume_type'] = st.selectbox(
+            "Volume Type",
+            ["gp3", "gp2", "io1", "io2", "st1", "sc1"],
+            key=f"{key_prefix}_ebs_type"
+        )
+        
+        if config['volume_type'] in ['io1', 'io2']:
+            config['iops'] = st.slider(
+                "IOPS",
+                min_value=100,
+                max_value=16000,
+                value=1000,
+                key=f"{key_prefix}_ebs_iops"
+            )
+    
+    elif service == "Amazon EFS":
+        st.write("**File System Configuration**")
+        
+        config['storage_gb'] = st.slider(
+            "Storage (GB)",
+            min_value=10,
+            max_value=10000,
+            value=500,
+            key=f"{key_prefix}_efs_size"
+        )
+        
+        config['storage_class'] = st.selectbox(
+            "Storage Class",
+            ["Standard", "Infrequent Access"],
+            key=f"{key_prefix}_efs_class"
+        )
+    
+    elif service == "Amazon ElastiCache":
+        st.write("**Cache Configuration**")
+        
+        config['node_type'] = st.selectbox(
+            "Node Type",
+            ["cache.t3.micro", "cache.t3.small", "cache.t3.medium", "cache.m5.large", "cache.r5.large"],
+            key=f"{key_prefix}_cache_node"
+        )
+        
+        config['node_count'] = st.slider(
+            "Number of Nodes",
+            min_value=1,
+            max_value=10,
+            value=2,
+            key=f"{key_prefix}_cache_nodes"
+        )
+        
+        config['engine'] = st.selectbox(
+            "Engine",
+            ["Redis", "Memcached"],
+            key=f"{key_prefix}_cache_engine"
+        )
+    
+    elif service == "Amazon CloudFront":
+        st.write("**CDN Configuration**")
+        
+        config['data_transfer_tb'] = st.slider(
+            "Monthly Data Transfer (TB)",
+            min_value=1,
+            max_value=1000,
+            value=50,
+            key=f"{key_prefix}_cf_transfer"
+        )
+        
+        config['requests_million'] = st.slider(
+            "Monthly Requests (Millions)",
+            min_value=1,
+            max_value=100,
+            value=10,
+            key=f"{key_prefix}_cf_requests"
+        )
+    
+    elif service == "Elastic Load Balancing":
+        st.write("**Load Balancer Configuration**")
+        
+        config['lb_type'] = st.selectbox(
+            "Load Balancer Type",
+            ["Application Load Balancer", "Network Load Balancer"],
+            key=f"{key_prefix}_lb_type"
+        )
+        
+        config['lcu_count'] = st.slider(
+            "Load Balancer Capacity Units",
+            min_value=1000,
+            max_value=100000,
+            value=10000,
+            step=1000,
+            key=f"{key_prefix}_lcu_count"
+        )
+    
+    elif service == "Amazon VPC":
+        st.write("**Network Configuration**")
+        
+        config['vpc_count'] = st.slider(
+            "Number of VPCs",
+            min_value=1,
+            max_value=10,
+            value=1,
+            key=f"{key_prefix}_vpc_count"
+        )
+        
+        config['nat_gateways'] = st.slider(
+            "NAT Gateways",
+            min_value=0,
+            max_value=10,
+            value=2,
+            key=f"{key_prefix}_nat_gateways"
+        )
+        
+        config['vpc_endpoints'] = st.slider(
+            "VPC Endpoints",
+            min_value=0,
+            max_value=20,
+            value=5,
+            key=f"{key_prefix}_vpc_endpoints"
+        )
+    
+    elif service == "AWS WAF":
+        st.write("**Web Application Firewall Configuration**")
+        
+        config['web_acls'] = st.slider(
+            "Web ACLs",
+            min_value=1,
+            max_value=10,
+            value=2,
+            key=f"{key_prefix}_web_acls"
+        )
+        
+        config['rules_per_acl'] = st.slider(
+            "Rules per ACL",
+            min_value=1,
+            max_value=100,
+            value=10,
+            key=f"{key_prefix}_rules_per_acl"
+        )
+        
+        config['requests_billion'] = st.slider(
+            "Monthly Requests (Billions)",
+            min_value=0.1,
+            max_value=10.0,
+            value=1.0,
+            step=0.1,
+            key=f"{key_prefix}_waf_requests"
+        )
+    
+    elif service == "AWS Shield":
+        st.write("**DDoS Protection Configuration**")
+        
+        config['protection_level'] = st.selectbox(
+            "Protection Level",
+            ["Standard", "Advanced"],
+            key=f"{key_prefix}_shield_level"
+        )
+        
+        if config['protection_level'] == 'Advanced':
+            config['protected_resources'] = st.slider(
+                "Protected Resources",
+                min_value=1,
+                max_value=100,
+                value=5,
+                key=f"{key_prefix}_protected_resources"
+            )
+    
+    elif service == "Amazon GuardDuty":
+        st.write("**Threat Detection Configuration**")
+        
+        config['data_sources'] = st.multiselect(
+            "Data Sources",
+            ["CloudTrail", "VPC", "DNS"],
+            default=["CloudTrail", "VPC", "DNS"],
+            key=f"{key_prefix}_guardduty_sources"
+        )
+        
+        config['protected_accounts'] = st.slider(
+            "Protected Accounts",
+            min_value=1,
+            max_value=50,
+            value=1,
+            key=f"{key_prefix}_protected_accounts"
+        )
+    
+    elif service == "Amazon SageMaker":
+        st.write("**ML Configuration**")
+        
+        config['usage_type'] = st.selectbox(
+            "Usage Type",
+            ["Training", "Inference", "Notebooks", "All"],
+            key=f"{key_prefix}_sagemaker_usage"
+        )
+        
+        if config['usage_type'] in ['Training', 'All']:
+            config['training_hours'] = st.slider(
+                "Training Hours per Month",
+                min_value=0,
+                max_value=1000,
+                value=100,
+                key=f"{key_prefix}_training_hours"
+            )
+        
+        if config['usage_type'] in ['Inference', 'All']:
+            config['inference_hours'] = st.slider(
+                "Inference Hours per Month",
+                min_value=0,
+                max_value=5000,
+                value=1000,
+                key=f"{key_prefix}_inference_hours"
+            )
+        
+        if config['usage_type'] in ['Notebooks', 'All']:
+            config['notebook_hours'] = st.slider(
+                "Notebook Hours per Month",
+                min_value=0,
+                max_value=500,
+                value=160,
+                key=f"{key_prefix}_notebook_hours"
+            )
+        
+        config['storage_gb'] = st.slider(
+            "Storage (GB)",
+            min_value=10,
+            max_value=5000,
+            value=500,
+            key=f"{key_prefix}_sagemaker_storage"
+        )
+    
+    elif service == "Amazon Bedrock":
+        st.write("**Foundation Model Configuration**")
+        
+        config['input_tokens_million'] = st.slider(
+            "Input Tokens (Millions per Month)",
+            min_value=1,
+            max_value=100,
+            value=10,
+            key=f"{key_prefix}_input_tokens"
+        )
+        
+        config['output_tokens_million'] = st.slider(
+            "Output Tokens (Millions per Month)",
+            min_value=1,
+            max_value=100,
+            value=5,
+            key=f"{key_prefix}_output_tokens"
+        )
+        
+        config['custom_models'] = st.slider(
+            "Custom Models",
+            min_value=0,
+            max_value=10,
+            value=0,
+            key=f"{key_prefix}_custom_models"
+        )
+        
+        config['fine_tuning_hours'] = st.slider(
+            "Fine-tuning Hours",
+            min_value=0,
+            max_value=100,
+            value=0,
+            key=f"{key_prefix}_fine_tuning"
+        )
+    
+    # Common configuration for all services
+    st.write("**General Configuration**")
+    config["region"] = st.selectbox(
+        "Region",
+        ["us-east-1", "us-west-2", "eu-west-1", "ap-northeast-1", "ap-southeast-1"],
+        key=f"{key_prefix}_region"
+    )
+    
+    return config
+
+def render_yearly_visualization(yearly_data: Dict, service_name: str):
+    """Render yearly visualization for service costs using Streamlit native charts"""
+    if not yearly_data or "years" not in yearly_data or not yearly_data["years"]:
+        st.info(f"No yearly data available for {service_name}")
+        return
+    
+    # Create a DataFrame for easier plotting
+    df = pd.DataFrame({
+        'Year': yearly_data["years"],
+        'Yearly Cost': yearly_data["yearly_costs"],
+        'Monthly Cost': yearly_data["monthly_costs"],
+        'Cumulative Cost': yearly_data["cumulative_costs"]
+    })
+    
+    st.write(f"**{service_name} - Cost Projection**")
+    
+    # Yearly cost chart
+    st.bar_chart(df.set_index('Year')['Yearly Cost'])
+    
+    # Cumulative cost line chart
+    st.line_chart(df.set_index('Year')['Cumulative Cost'])
 
 def main():
     st.set_page_config(
@@ -1175,8 +2181,49 @@ def main():
             with st.expander("💡 Architecture Tips", expanded=True):
                 ArchitectureDiagramGenerator._display_architecture_recommendations(st.session_state.selected_services)
         
-        # [Rest of your existing main function for cost summary, recommendations, and export]
-        # This includes your existing cost visualization, recommendations, and export functionality
+        # TOTAL COST SUMMARY
+        st.header("💰 Total Cost Summary")
+        
+        col1, col2, col3 = st.columns(3)
+        
+        with col1:
+            st.metric(
+                "Total Estimated Cost", 
+                f"${st.session_state.total_cost:,.2f}",
+                f"for {timeline_config['timeline_type']}"
+            )
+        
+        with col2:
+            avg_monthly = st.session_state.total_cost / timeline_config['total_months'] if timeline_config['total_months'] > 0 else 0
+            st.metric("Average Monthly Cost", f"${avg_monthly:,.2f}")
+        
+        with col3:
+            commitment_savings = sum(
+                config['pricing'].get('commitment_savings', 0) * timeline_config['total_months'] 
+                for config in st.session_state.configurations.values()
+            )
+            st.metric("Commitment Savings", f"${commitment_savings:,.2f}")
+        
+        # Cost breakdown
+        st.subheader("📊 Cost Breakdown by Service")
+        
+        cost_data = []
+        for service, config in st.session_state.configurations.items():
+            cost_data.append({
+                'Service': service,
+                'Total Cost': config['pricing']['total_timeline_cost'],
+                'Monthly Cost': config['pricing']['discounted_monthly_cost']
+            })
+        
+        if cost_data:
+            cost_df = pd.DataFrame(cost_data)
+            st.dataframe(cost_df, use_container_width=True)
+            
+            # Pie chart
+            fig, ax = plt.subplots()
+            ax.pie(cost_df['Total Cost'], labels=cost_df['Service'], autopct='%1.1f%%')
+            ax.set_title('Cost Distribution by Service')
+            st.pyplot(fig)
 
 if __name__ == "__main__":
     main()
