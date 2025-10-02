@@ -79,6 +79,7 @@ class AWSPricingAPI:
             }
         }
 
+# Updated AWS Services - removed DynamoDB and Comprehend
 AWS_SERVICES = {
     "Compute": {
         "Amazon EC2": "Virtual servers in the cloud",
@@ -93,13 +94,11 @@ AWS_SERVICES = {
     },
     "Database": {
         "Amazon RDS": "Managed relational database",
-        "Amazon DynamoDB": "Managed NoSQL database",
         "Amazon ElastiCache": "In-memory caching"
     },
     "AI/ML": {
         "Amazon Bedrock": "Fully managed foundation models",
-        "Amazon SageMaker": "Build, train and deploy ML models",
-        "Amazon Comprehend": "Natural language processing"
+        "Amazon SageMaker": "Build, train and deploy ML models"
     },
     "Networking": {
         "Amazon VPC": "Isolated cloud resources",
@@ -170,6 +169,18 @@ class ArchitectureDiagramGenerator:
                     elif service == "AWS Lambda" and config:
                         memory = config.get('memory_mb', 128)
                         label = f"{label}<br/>{memory}MB"
+                    elif service == "Amazon ECS" and config:
+                        cluster_type = config.get('cluster_type', 'Fargate')
+                        if cluster_type == 'Fargate':
+                            cpu = config.get('cpu_units', 1024)
+                            memory = config.get('memory_gb', 2)
+                            label = f"{label}<br/>Fargate<br/>{cpu}CPU/{memory}GB"
+                        else:
+                            instances = config.get('instance_count', 2)
+                            label = f"{label}<br/>EC2<br/>{instances} instances"
+                    elif service == "Amazon EKS" and config:
+                        node_count = config.get('node_count', 2)
+                        label = f"{label}<br/>{node_count} nodes"
                     
                     # Add node
                     mermaid_code += f"    {node_id}[\"{label}\"]\n"
@@ -200,16 +211,13 @@ class ArchitectureDiagramGenerator:
                 if compute in all_services:
                     connections.append(("Elastic Load Balancing", compute, "routes"))
         
-        # EC2/Lambda -> RDS/DynamoDB
+        # EC2/Lambda -> RDS
         compute_services = ["Amazon EC2", "AWS Lambda", "Amazon ECS", "Amazon EKS"]
-        database_services = ["Amazon RDS", "Amazon DynamoDB"]
-        
-        for compute in compute_services:
-            if compute in all_services:
-                for db in database_services:
-                    if db in all_services:
-                        connections.append((compute, db, "queries"))
-                        break
+        if "Amazon RDS" in all_services:
+            for compute in compute_services:
+                if compute in all_services:
+                    connections.append((compute, "Amazon RDS", "queries"))
+                    break
         
         # EC2 -> S3
         if "Amazon EC2" in all_services and "Amazon S3" in all_services:
@@ -247,206 +255,6 @@ class ArchitectureDiagramGenerator:
                     mermaid_code += f"    {source_id} --> {target_id}\n"
         
         return mermaid_code
-
-    # Map service names to diagram icons (for Graphviz version)
-    SERVICE_ICON_MAP = {
-        "Amazon EC2": "EC2",
-        "AWS Lambda": "Lambda",
-        "Amazon ECS": "ECS",
-        "Amazon EKS": "EKS",
-        "Amazon S3": "S3",
-        "Amazon EBS": "EBS",
-        "Amazon EFS": "EFS",
-        "Amazon RDS": "RDS",
-        "Amazon DynamoDB": "Dynamodb",
-        "Amazon ElastiCache": "ElastiCache",
-        "Amazon Bedrock": "Bedrock",
-        "Amazon SageMaker": "Sagemaker",
-        "Amazon Comprehend": "Comprehend",
-        "Amazon VPC": "VPC",
-        "Amazon CloudFront": "CloudFront",
-        "Elastic Load Balancing": "ELB",
-        "AWS WAF": "WAF",
-        "Amazon GuardDuty": "GuardDuty",
-        "AWS Shield": "Shield"
-    }
-    
-    @staticmethod
-    def get_icon_class(service_name: str):
-        """Get the appropriate icon class for a service (for Graphviz version)"""
-        icon_mapping = {
-            "EC2": EC2,
-            "Lambda": Lambda,
-            "ECS": ECS,
-            "EKS": EKS,
-            "S3": S3,
-            "EBS": EBS,
-            "EFS": EFS,
-            "RDS": RDS,
-            "Dynamodb": Dynamodb,
-            "ElastiCache": ElastiCache,
-            "Bedrock": Sagemaker,  # Using Sagemaker as placeholder
-            "Sagemaker": Sagemaker,
-            "Comprehend": Comprehend,
-            "VPC": VPC,
-            "CloudFront": CloudFront,
-            "ELB": ELB,
-            "WAF": WAF,
-            "GuardDuty": GuardDuty,
-            "Shield": Shield
-        }
-        
-        icon_name = ArchitectureDiagramGenerator.SERVICE_ICON_MAP.get(service_name)
-        return icon_mapping.get(icon_name, EC2)  # Default to EC2 if not found
-    
-    @staticmethod
-    def generate_architecture_diagram(selected_services: Dict, configurations: Dict) -> Optional[str]:
-        """Generate AWS architecture diagram based on selected services (Graphviz version)"""
-        if not DIAGRAMS_AVAILABLE:
-            st.warning("⚠️ Install 'diagrams' and 'graphviz' for automatic architecture generation")
-            st.code("pip install diagrams graphviz", language="bash")
-            return None
-        
-        try:
-            # Create temporary directory for diagram
-            temp_dir = tempfile.gettempdir()
-            diagram_path = os.path.join(temp_dir, "aws_architecture")
-            
-            # Remove old diagram if exists
-            if os.path.exists(f"{diagram_path}.png"):
-                os.remove(f"{diagram_path}.png")
-            
-            # Create diagram with custom attributes
-            with Diagram(
-                "AWS Cloud Architecture",
-                filename=diagram_path,
-                show=False,
-                direction="LR",
-                outformat="png",
-                graph_attr={
-                    "fontsize": "14",
-                    "bgcolor": "white",
-                    "pad": "0.5",
-                    "splines": "ortho",
-                    "nodesep": "0.8",
-                    "ranksep": "1.0"
-                }
-            ):
-                # Group services by category
-                service_nodes = {}
-                
-                for category, services in selected_services.items():
-                    if services:  # Only create cluster if there are services
-                        with Cluster(f"{category} Layer"):
-                            for service in services:
-                                icon_class = ArchitectureDiagramGenerator.get_icon_class(service)
-                                
-                                # Get configuration details if available
-                                config = configurations.get(service, {}).get('config', {})
-                                
-                                # Create label with key details
-                                label = service.replace("Amazon ", "").replace("AWS ", "")
-                                
-                                if service == "Amazon EC2" and config:
-                                    instance_count = config.get('instance_count', 1)
-                                    instance_type = config.get('instance_type', 't3.micro')
-                                    label = f"{label}\\n{instance_count}x {instance_type}"
-                                elif service == "Amazon RDS" and config:
-                                    instance_type = config.get('instance_type', 'db.t3.micro')
-                                    engine = config.get('engine', 'PostgreSQL')
-                                    label = f"{label}\\n{engine}\\n{instance_type}"
-                                elif service == "Amazon S3" and config:
-                                    storage_gb = config.get('storage_gb', 100)
-                                    label = f"{label}\\n{storage_gb}GB"
-                                elif service == "AWS Lambda" and config:
-                                    memory = config.get('memory_mb', 128)
-                                    label = f"{label}\\n{memory}MB"
-                                
-                                service_nodes[service] = icon_class(label)
-                
-                # Create logical connections between services
-                ArchitectureDiagramGenerator._create_service_connections(service_nodes, selected_services)
-            
-            # Return the path to generated diagram
-            diagram_file = f"{diagram_path}.png"
-            if os.path.exists(diagram_file):
-                return diagram_file
-            
-            return None
-            
-        except Exception as e:
-            st.error(f"Error generating architecture diagram: {str(e)}")
-            st.info("Make sure Graphviz is installed on your system: https://graphviz.org/download/")
-            return None
-    
-    @staticmethod
-    def _create_service_connections(service_nodes: Dict, selected_services: Dict):
-        """Create logical connections between AWS services (for Graphviz version)"""
-        # Flatten services list
-        all_services = []
-        for services in selected_services.values():
-            all_services.extend(services)
-        
-        # Define common service connection patterns
-        connections = []
-        
-        # CloudFront -> S3
-        if "Amazon CloudFront" in all_services and "Amazon S3" in all_services:
-            connections.append(("Amazon CloudFront", "Amazon S3", "distributes"))
-        
-        # ELB -> EC2/ECS/EKS
-        if "Elastic Load Balancing" in all_services:
-            for compute in ["Amazon EC2", "Amazon ECS", "Amazon EKS"]:
-                if compute in all_services:
-                    connections.append(("Elastic Load Balancing", compute, "routes"))
-        
-        # EC2/ECS/Lambda -> RDS/DynamoDB
-        compute_services = ["Amazon EC2", "AWS Lambda", "Amazon ECS", "Amazon EKS"]
-        database_services = ["Amazon RDS", "Amazon DynamoDB"]
-        
-        for compute in compute_services:
-            if compute in all_services:
-                for db in database_services:
-                    if db in all_services:
-                        connections.append((compute, db, ""))
-                        break  # Only connect to one database
-        
-        # EC2 -> S3
-        if "Amazon EC2" in all_services and "Amazon S3" in all_services:
-            if ("Amazon EC2", "Amazon S3", "") not in [(c[0], c[1], "") for c in connections]:
-                connections.append(("Amazon EC2", "Amazon S3", ""))
-        
-        # Lambda -> S3
-        if "AWS Lambda" in all_services and "Amazon S3" in all_services:
-            connections.append(("AWS Lambda", "Amazon S3", ""))
-        
-        # WAF -> CloudFront/ELB
-        if "AWS WAF" in all_services:
-            for frontend in ["Amazon CloudFront", "Elastic Load Balancing"]:
-                if frontend in all_services:
-                    connections.append(("AWS WAF", frontend, "protects"))
-                    break
-        
-        # EC2 -> ElastiCache
-        if "Amazon EC2" in all_services and "Amazon ElastiCache" in all_services:
-            connections.append(("Amazon EC2", "Amazon ElastiCache", ""))
-        
-        # SageMaker/Bedrock -> S3
-        for ml_service in ["Amazon SageMaker", "Amazon Bedrock"]:
-            if ml_service in all_services and "Amazon S3" in all_services:
-                connections.append((ml_service, "Amazon S3", ""))
-        
-        # EBS -> EC2 (storage connection)
-        if "Amazon EBS" in all_services and "Amazon EC2" in all_services:
-            connections.append(("Amazon EC2", "Amazon EBS", ""))
-        
-        # Create edges with labels only for important connections
-        for source, target, label in connections:
-            if source in service_nodes and target in service_nodes:
-                if label:
-                    service_nodes[source] >> Edge(label=label, style="bold", color="blue") >> service_nodes[target]
-                else:
-                    service_nodes[source] >> service_nodes[target]
 
 class ServiceSelector:
     @staticmethod
@@ -676,17 +484,34 @@ class DynamicPricingEngine:
             
         elif service == "Amazon RDS":
             instance_type = config.get('instance_type', 'db.t3.micro')
+            engine = config.get('engine', 'PostgreSQL')
             
+            # RDS instance pricing (per hour)
             rds_prices = {
                 'db.t3.micro': 0.017, 'db.t3.small': 0.034, 'db.t3.medium': 0.068,
-                'db.m5.large': 0.17, 'db.r5.large': 0.24
+                'db.m5.large': 0.17, 'db.m5.xlarge': 0.34, 'db.r5.large': 0.24
             }
             
-            base_price = rds_prices.get(instance_type, 0.1) * 730
+            # Engine-specific adjustments
+            engine_multipliers = {
+                'PostgreSQL': 1.0,
+                'MySQL': 1.0,
+                'Aurora MySQL': 1.2,
+                'SQL Server': 1.5
+            }
             
+            base_price = rds_prices.get(instance_type, 0.1) * 730 * engine_multipliers.get(engine, 1.0)
+            
+            # Storage costs
             storage_gb = config.get('storage_gb', 20)
-            base_price += storage_gb * 0.115
+            base_price += storage_gb * 0.115  # $0.115 per GB-month
             
+            # Backup storage (assuming 100% of provisioned storage for backups)
+            backup_retention = config.get('backup_retention', 7)
+            if backup_retention > 0:
+                base_price += storage_gb * 0.095  # $0.095 per GB-month for backup storage
+            
+            # Multi-AZ multiplier
             if config.get('multi_az', False):
                 base_price *= 2
             
@@ -709,10 +534,239 @@ class DynamicPricingEngine:
             requests = config.get('requests_per_month', 1000000)
             duration_ms = config.get('avg_duration_ms', 100)
             
+            # Lambda pricing calculation
+            request_cost = requests * 0.0000002  # $0.20 per 1M requests
             gb_seconds = (requests * duration_ms * memory_mb) / (1000 * 1024)
-            return (requests * 0.0000002) + (gb_seconds * 0.0000166667)
+            compute_cost = gb_seconds * 0.0000166667  # $0.0000166667 per GB-second
+            
+            return request_cost + compute_cost
+            
+        elif service == "Amazon ECS":
+            cluster_type = config.get('cluster_type', 'Fargate')
+            
+            if cluster_type == 'Fargate':
+                cpu_units = config.get('cpu_units', 1024)
+                memory_gb = config.get('memory_gb', 2)
+                service_count = config.get('service_count', 3)
+                avg_tasks = config.get('avg_tasks_per_service', 2)
+                
+                # Fargate pricing per vCPU and GB
+                cpu_price_per_hour = 0.04048  # per vCPU per hour
+                memory_price_per_hour = 0.004445  # per GB per hour
+                
+                total_tasks = service_count * avg_tasks
+                monthly_cost = total_tasks * 730 * (cpu_units/1024 * cpu_price_per_hour + memory_gb * memory_price_per_hour)
+                return monthly_cost
+            else:
+                # EC2-based ECS pricing
+                instance_count = config.get('instance_count', 2)
+                instance_type = config.get('ecs_instance_type', 't3.medium')
+                
+                # Use EC2 pricing for the instances
+                ec2_prices = {
+                    't3.medium': 0.0416, 'm5.large': 0.096, 'm5.xlarge': 0.192
+                }
+                
+                base_price = ec2_prices.get(instance_type, 0.1) * 730 * instance_count
+                return base_price
+            
+        elif service == "Amazon EKS":
+            node_count = config.get('node_count', 2)
+            node_type = config.get('node_type', 't3.medium')
+            managed_node_groups = config.get('managed_node_groups', 1)
+            
+            # EKS cluster cost ($0.10 per hour)
+            eks_cluster_cost = 0.10 * 730
+            
+            # Node instance costs
+            node_prices = {
+                't3.medium': 0.0416, 'm5.large': 0.096, 'm5.xlarge': 0.192,
+                'c5.large': 0.085, 'r5.large': 0.126
+            }
+            
+            node_cost = node_prices.get(node_type, 0.1) * 730 * node_count
+            
+            return eks_cluster_cost + node_cost
+            
+        elif service == "Amazon EBS":
+            storage_gb = config.get('storage_gb', 30)
+            volume_type = config.get('volume_type', 'gp3')
+            iops = config.get('iops', 3000) if volume_type in ['io1', 'io2'] else 0
+            
+            storage_price_per_gb = {
+                'gp3': 0.08, 'gp2': 0.10, 'io1': 0.125, 'io2': 0.125,
+                'st1': 0.045, 'sc1': 0.015
+            }
+            
+            base_price = storage_gb * storage_price_per_gb.get(volume_type, 0.08)
+            
+            # Add IOPS cost for provisioned IOPS volumes
+            if volume_type in ['io1', 'io2']:
+                base_price += iops * 0.065  # $0.065 per provisioned IOPS
+            
+            return base_price
+            
+        elif service == "Amazon EFS":
+            storage_gb = config.get('storage_gb', 100)
+            storage_class = config.get('storage_class', 'Standard')
+            
+            efs_prices = {
+                'Standard': 0.30,  # $0.30 per GB-month
+                'Infrequent Access': 0.025  # $0.025 per GB-month
+            }
+            
+            return storage_gb * efs_prices.get(storage_class, 0.30)
+            
+        elif service == "Amazon ElastiCache":
+            node_type = config.get('node_type', 'cache.t3.micro')
+            node_count = config.get('node_count', 1)
+            engine = config.get('engine', 'Redis')
+            
+            cache_prices = {
+                'cache.t3.micro': 0.020, 'cache.t3.small': 0.038, 'cache.t3.medium': 0.076,
+                'cache.m5.large': 0.171, 'cache.r5.large': 0.242
+            }
+            
+            base_price = cache_prices.get(node_type, 0.1) * 730 * node_count
+            
+            # Engine multiplier
+            if engine == 'Memcached':
+                base_price *= 0.9  # Memcached is slightly cheaper
+            
+            return base_price
+            
+        elif service == "Amazon CloudFront":
+            data_transfer_tb = config.get('data_transfer_tb', 50)
+            requests_million = config.get('requests_million', 10)
+            
+            # Data transfer pricing (per GB)
+            data_transfer_cost = data_transfer_tb * 1024 * 0.085  # $0.085 per GB
+            
+            # Request pricing (per 10,000 requests)
+            request_cost = requests_million * 100 * 0.0075  # $0.0075 per 10,000 requests
+            
+            return data_transfer_cost + request_cost
+            
+        elif service == "Elastic Load Balancing":
+            lb_type = config.get('lb_type', 'Application Load Balancer')
+            lcu_count = config.get('lcu_count', 10000)
+            data_processed_tb = config.get('data_processed_tb', 10)
+            
+            if lb_type == 'Application Load Balancer':
+                # ALB pricing: $0.0225 per ALB-hour + $0.008 per LCU-hour
+                alb_hourly = 0.0225 * 730  # $0.0225 per hour
+                lcu_cost = lcu_count * 0.008  # $0.008 per LCU-hour
+                return alb_hourly + lcu_cost
+            else:
+                # NLB pricing: $0.0225 per NLB-hour + $0.006 per NLCU-hour
+                nlb_hourly = 0.0225 * 730  # $0.0225 per hour
+                nlcu_cost = lcu_count * 0.006  # $0.006 per NLCU-hour
+                return nlb_hourly + nlcu_cost
+            
+        elif service == "Amazon VPC":
+            vpc_count = config.get('vpc_count', 1)
+            nat_gateways = config.get('nat_gateways', 2)
+            vpc_endpoints = config.get('vpc_endpoints', 5)
+            vpn_connections = config.get('vpn_connections', 0)
+            
+            # VPC is free, but associated services have costs
+            nat_cost = nat_gateways * 0.045 * 730  # $0.045 per NAT Gateway-hour
+            endpoint_cost = vpc_endpoints * 0.01 * 730  # $0.01 per endpoint-hour
+            vpn_cost = vpn_connections * 0.05 * 730  # $0.05 per VPN connection-hour
+            
+            return nat_cost + endpoint_cost + vpn_cost
+            
+        elif service == "AWS WAF":
+            web_acls = config.get('web_acls', 2)
+            rules_per_acl = config.get('rules_per_acl', 10)
+            requests_billion = config.get('requests_billion', 1.0)
+            managed_rules = config.get('managed_rules', True)
+            
+            web_acl_cost = web_acls * 5.00  # $5.00 per web ACL per month
+            rule_cost = web_acls * rules_per_acl * 1.00  # $1.00 per rule per month
+            request_cost = requests_billion * 0.60  # $0.60 per million requests
+            managed_rule_cost = web_acls * 1.00 if managed_rules else 0  # $1.00 per managed rule set
+            
+            return web_acl_cost + rule_cost + request_cost + managed_rule_cost
+            
+        elif service == "AWS Shield":
+            protection_level = config.get('protection_level', 'Standard')
+            protected_resources = config.get('protected_resources', 5)
+            
+            if protection_level == 'Standard':
+                # Shield Standard is free
+                return 0
+            else:
+                # Shield Advanced: $3000 per month + $XXX per protected resource
+                shield_advanced_cost = 3000  # $3000 per month
+                resource_cost = protected_resources * 100  # $100 per protected resource
+                return shield_advanced_cost + resource_cost
+            
+        elif service == "Amazon GuardDuty":
+            data_sources = config.get('data_sources', ['CloudTrail', 'VPC', 'DNS'])
+            protected_accounts = config.get('protected_accounts', 1)
+            
+            # GuardDuty pricing per GB of data analyzed
+            cloudtrail_cost = 1.00 if 'CloudTrail' in data_sources else 0  # $1.00 per GB
+            vpc_cost = 0.50 if 'VPC' in data_sources else 0  # $0.50 per GB
+            dns_cost = 0.50 if 'DNS' in data_sources else 0  # $0.50 per GB
+            
+            # Estimate data volumes (simplified)
+            estimated_data_gb = 100  # Simplified estimate
+            
+            base_cost = (cloudtrail_cost + vpc_cost + dns_cost) * estimated_data_gb
+            
+            # Multi-account multiplier
+            if protected_accounts > 1:
+                base_cost *= protected_accounts * 0.8  # Volume discount
+            
+            return base_cost
+            
+        elif service == "Amazon SageMaker":
+            usage_type = config.get('usage_type', 'Training')
+            training_hours = config.get('training_hours', 100)
+            inference_hours = config.get('inference_hours', 1000)
+            notebook_hours = config.get('notebook_hours', 160)
+            storage_gb = config.get('storage_gb', 500)
+            
+            base_cost = 0
+            
+            if usage_type in ['Training', 'All']:
+                # ml.m5.xlarge instance: $0.269 per hour
+                base_cost += training_hours * 0.269
+            
+            if usage_type in ['Inference', 'All']:
+                # ml.m5.large instance: $0.134 per hour
+                base_cost += inference_hours * 0.134
+            
+            if usage_type in ['Notebooks', 'All']:
+                # ml.t3.medium instance: $0.0582 per hour
+                base_cost += notebook_hours * 0.0582
+            
+            # EBS storage for models and data
+            base_cost += storage_gb * 0.23  # $0.23 per GB-month
+            
+            return base_cost
+            
+        elif service == "Amazon Bedrock":
+            input_tokens_million = config.get('input_tokens_million', 10)
+            output_tokens_million = config.get('output_tokens_million', 5)
+            custom_models = config.get('custom_models', 0)
+            fine_tuning_hours = config.get('fine_tuning_hours', 0)
+            
+            # Claude model pricing (example)
+            input_cost = input_tokens_million * 0.80  # $0.80 per million input tokens
+            output_cost = output_tokens_million * 4.00  # $4.00 per million output tokens
+            custom_model_cost = custom_models * 100  # $100 per custom model per month
+            fine_tuning_cost = fine_tuning_hours * 50  # $50 per fine-tuning hour
+            
+            return input_cost + output_cost + custom_model_cost + fine_tuning_cost
         
+        # Default case for services without specific pricing
         return 0.0
+
+# [The rest of the code remains the same - render_service_configurator, render_yearly_visualization, and main function]
+# Note: I've removed the configuration sections for DynamoDB and Comprehend since you requested their removal
 
 def render_service_configurator(service: str, key_prefix: str) -> Dict:
     """Render configuration options for selected service"""
@@ -876,7 +930,6 @@ def render_service_configurator(service: str, key_prefix: str) -> Dict:
             key=f"{key_prefix}_class"
         )
         
-        # Get description safely
         storage_description = ""
         if storage_class in storage_classes:
             storage_description = storage_classes[storage_class]["Description"]
@@ -966,9 +1019,16 @@ def render_service_configurator(service: str, key_prefix: str) -> Dict:
                     key=f"{key_prefix}_ec2_count"
                 )
                 
+                ecs_instance_type = st.selectbox(
+                    "Instance Type",
+                    ["t3.medium", "m5.large", "m5.xlarge"],
+                    key=f"{key_prefix}_ecs_instance_type"
+                )
+                
                 config.update({
                     "cluster_type": cluster_type,
-                    "instance_count": instance_count
+                    "instance_count": instance_count,
+                    "ecs_instance_type": ecs_instance_type
                 })
         
         with col2:
@@ -992,6 +1052,166 @@ def render_service_configurator(service: str, key_prefix: str) -> Dict:
                 "service_count": service_count,
                 "avg_tasks_per_service": avg_tasks_per_service
             })
+    
+    elif service == "Amazon EKS":
+        st.write("**EKS Cluster Configuration**")
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            node_count = st.number_input(
+                "Number of Nodes",
+                min_value=1,
+                max_value=50,
+                value=2,
+                key=f"{key_prefix}_node_count"
+            )
+            
+            node_type = st.selectbox(
+                "Node Instance Type",
+                ["t3.medium", "m5.large", "m5.xlarge", "c5.large", "r5.large"],
+                key=f"{key_prefix}_node_type"
+            )
+        
+        with col2:
+            managed_node_groups = st.number_input(
+                "Managed Node Groups",
+                min_value=1,
+                max_value=10,
+                value=1,
+                key=f"{key_prefix}_node_groups"
+            )
+            
+            auto_scaling = st.checkbox(
+                "Enable Auto Scaling",
+                value=True,
+                key=f"{key_prefix}_auto_scaling"
+            )
+        
+        config.update({
+            "node_count": node_count,
+            "node_type": node_type,
+            "managed_node_groups": managed_node_groups,
+            "auto_scaling": auto_scaling
+        })
+    
+    elif service == "Amazon EBS":
+        st.write("**EBS Volume Configuration**")
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            storage_gb = st.slider(
+                "Storage Size (GB)",
+                min_value=1,
+                max_value=16384,
+                value=30,
+                key=f"{key_prefix}_storage"
+            )
+            
+            volume_type = st.selectbox(
+                "Volume Type",
+                ["gp3", "gp2", "io1", "io2", "st1", "sc1"],
+                key=f"{key_prefix}_volume_type"
+            )
+        
+        with col2:
+            if volume_type in ['io1', 'io2']:
+                iops = st.slider(
+                    "Provisioned IOPS",
+                    min_value=100,
+                    max_value=64000,
+                    value=3000,
+                    key=f"{key_prefix}_iops"
+                )
+                config["iops"] = iops
+            
+            encrypted = st.checkbox(
+                "Encryption",
+                value=True,
+                key=f"{key_prefix}_encrypted"
+            )
+        
+        config.update({
+            "storage_gb": storage_gb,
+            "volume_type": volume_type,
+            "encrypted": encrypted
+        })
+    
+    elif service == "Amazon EFS":
+        st.write("**EFS File System Configuration**")
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            storage_gb = st.slider(
+                "Storage Size (GB)",
+                min_value=1,
+                max_value=100000,
+                value=100,
+                key=f"{key_prefix}_storage"
+            )
+            
+            storage_class = st.selectbox(
+                "Storage Class",
+                ["Standard", "Infrequent Access"],
+                key=f"{key_prefix}_class"
+            )
+        
+        with col2:
+            performance_mode = st.selectbox(
+                "Performance Mode",
+                ["General Purpose", "Max I/O"],
+                key=f"{key_prefix}_performance"
+            )
+            
+            throughput_mode = st.selectbox(
+                "Throughput Mode",
+                ["Bursting", "Provisioned"],
+                key=f"{key_prefix}_throughput"
+            )
+        
+        config.update({
+            "storage_gb": storage_gb,
+            "storage_class": storage_class,
+            "performance_mode": performance_mode,
+            "throughput_mode": throughput_mode
+        })
+    
+    elif service == "Amazon ElastiCache":
+        st.write("**ElastiCache Configuration**")
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            engine = st.selectbox(
+                "Cache Engine",
+                ["Redis", "Memcached"],
+                key=f"{key_prefix}_engine"
+            )
+            
+            node_type = st.selectbox(
+                "Node Type",
+                ["cache.t3.micro", "cache.t3.small", "cache.t3.medium", "cache.m5.large", "cache.r5.large"],
+                key=f"{key_prefix}_node_type"
+            )
+        
+        with col2:
+            node_count = st.number_input(
+                "Number of Nodes",
+                min_value=1,
+                max_value=20,
+                value=1,
+                key=f"{key_prefix}_node_count"
+            )
+            
+            multi_az = st.checkbox(
+                "Multi-AZ Deployment",
+                key=f"{key_prefix}_multiaz"
+            )
+        
+        config.update({
+            "engine": engine,
+            "node_type": node_type,
+            "node_count": node_count,
+            "multi_az": multi_az
+        })
     
     elif service == "Amazon CloudFront":
         st.write("**CDN Configuration**")
@@ -1032,64 +1252,6 @@ def render_service_configurator(service: str, key_prefix: str) -> Dict:
             "requests_million": requests_million,
             "origin_type": origin_type,
             "waf_enabled": waf_enabled
-        })
-    
-    elif service == "Amazon DynamoDB":
-        st.write("**DynamoDB Configuration**")
-        
-        capacity_mode = st.radio(
-            "Capacity Mode",
-            ["Provisioned", "On-Demand"],
-            key=f"{key_prefix}_capacity_mode"
-        )
-        
-        col1, col2 = st.columns(2)
-        with col1:
-            if capacity_mode == "Provisioned":
-                read_capacity = st.number_input(
-                    "Read Capacity Units",
-                    min_value=1,
-                    max_value=100000,
-                    value=10,
-                    key=f"{key_prefix}_read_capacity"
-                )
-                
-                write_capacity = st.number_input(
-                    "Write Capacity Units",
-                    min_value=1,
-                    max_value=100000,
-                    value=10,
-                    key=f"{key_prefix}_write_capacity"
-                )
-                
-                config.update({
-                    "capacity_mode": capacity_mode,
-                    "read_capacity": read_capacity,
-                    "write_capacity": write_capacity
-                })
-            else:
-                config.update({
-                    "capacity_mode": capacity_mode
-                })
-        
-        with col2:
-            storage_gb = st.slider(
-                "Storage (GB)",
-                min_value=1,
-                max_value=10000,
-                value=100,
-                key=f"{key_prefix}_dynamo_storage"
-            )
-            
-            backup_enabled = st.checkbox(
-                "Enable Point-in-Time Recovery",
-                value=True,
-                key=f"{key_prefix}_backup"
-            )
-        
-        config.update({
-            "storage_gb": storage_gb,
-            "backup_enabled": backup_enabled
         })
     
     elif service == "Elastic Load Balancing":
@@ -1213,6 +1375,61 @@ def render_service_configurator(service: str, key_prefix: str) -> Dict:
             "rules_per_acl": rules_per_acl,
             "requests_billion": requests_billion,
             "managed_rules": managed_rules
+        })
+    
+    elif service == "AWS Shield":
+        st.write("**Shield Configuration**")
+        
+        protection_level = st.selectbox(
+            "Protection Level",
+            ["Standard", "Advanced"],
+            key=f"{key_prefix}_protection_level"
+        )
+        
+        protected_resources = st.number_input(
+            "Protected Resources",
+            min_value=1,
+            max_value=100,
+            value=5,
+            key=f"{key_prefix}_protected_resources"
+        )
+        
+        config.update({
+            "protection_level": protection_level,
+            "protected_resources": protected_resources
+        })
+    
+    elif service == "Amazon GuardDuty":
+        st.write("**GuardDuty Configuration**")
+        
+        st.write("**Data Sources**")
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            cloudtrail = st.checkbox("CloudTrail", value=True, key=f"{key_prefix}_cloudtrail")
+        with col2:
+            vpc_flow = st.checkbox("VPC Flow Logs", value=True, key=f"{key_prefix}_vpc")
+        with col3:
+            dns_logs = st.checkbox("DNS Logs", value=True, key=f"{key_prefix}_dns")
+        
+        data_sources = []
+        if cloudtrail:
+            data_sources.append("CloudTrail")
+        if vpc_flow:
+            data_sources.append("VPC")
+        if dns_logs:
+            data_sources.append("DNS")
+        
+        protected_accounts = st.number_input(
+            "Protected Accounts",
+            min_value=1,
+            max_value=100,
+            value=1,
+            key=f"{key_prefix}_protected_accounts"
+        )
+        
+        config.update({
+            "data_sources": data_sources,
+            "protected_accounts": protected_accounts
         })
     
     elif service == "Amazon SageMaker":
