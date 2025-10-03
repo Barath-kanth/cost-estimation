@@ -116,7 +116,13 @@ class ProfessionalArchitectureGenerator:
             "Amazon SNS": "https://icon.icepanel.io/AWS/svg/Application-Integration/Simple-Notification-Service.svg",
             "Amazon SQS": "https://icon.icepanel.io/AWS/svg/Application-Integration/Simple-Queue-Service.svg",
             "User": "https://icon.icepanel.io/AWS/svg/General-Icons/User.svg",
-            "External": "https://icon.icepanel.io/AWS/svg/General-Icons/Internet-Gateway.svg"
+            "External": "https://icon.icepanel.io/AWS/svg/General-Icons/Internet-alt1.svg",
+            "API Gateway": "https://icon.icepanel.io/AWS/svg/Networking-Content-Delivery/API-Gateway.svg",
+            "Step Functions": "https://icon.icepanel.io/AWS/svg/Application-Integration/Step-Functions.svg",
+            "EventBridge": "https://icon.icepanel.io/AWS/svg/Application-Integration/EventBridge.svg",
+            "SNS": "https://icon.icepanel.io/AWS/svg/Application-Integration/Simple-Notification-Service.svg",
+            "SQS": "https://icon.icepanel.io/AWS/svg/Application-Integration/Simple-Queue-Service.svg",
+            "Bedrock": "https://icon.icepanel.io/AWS/svg/Machine-Learning/Bedrock.svg"
         }
         return icon_mapping.get(service_name, "https://icon.icepanel.io/AWS/svg/General-Icons/General.svg")
     
@@ -406,6 +412,30 @@ class ProfessionalArchitectureGenerator:
                     elif service == "AWS Lambda" and config:
                         memory = config.get('memory_mb', 128)
                         config_text = f"{memory}MB Memory"
+                    elif service == "Amazon ECS" and config:
+                        cluster_type = config.get('cluster_type', 'Fargate')
+                        config_text = f"{cluster_type}"
+                    elif service == "Amazon EKS" and config:
+                        node_count = config.get('node_count', 2)
+                        config_text = f"{node_count} nodes"
+                    elif service == "Amazon EFS" and config:
+                        storage_gb = config.get('storage_gb', 100)
+                        config_text = f"{storage_gb}GB"
+                    elif service == "Amazon Bedrock" and config:
+                        input_tokens = config.get('input_tokens_million', 10)
+                        config_text = f"{input_tokens}M tokens"
+                    elif service == "AWS Step Functions" and config:
+                        state_machines = config.get('state_machines', 1)
+                        config_text = f"{state_machines} workflows"
+                    elif service == "Amazon EventBridge" and config:
+                        event_buses = config.get('event_buses', 1)
+                        config_text = f"{event_buses} event bus"
+                    elif service == "Amazon SNS" and config:
+                        topics = config.get('topics', 1)
+                        config_text = f"{topics} topics"
+                    elif service == "Amazon SQS" and config:
+                        queues = config.get('queues', 1)
+                        config_text = f"{queues} queues"
                     
                     display_name = service.replace("Amazon ", "").replace("AWS ", "")
                     
@@ -590,6 +620,22 @@ class ProfessionalArchitectureGenerator:
             return f"{config.get('storage_gb', 100)}GB"
         elif service == "AWS Lambda":
             return f"{config.get('memory_mb', 128)}MB"
+        elif service == "Amazon ECS":
+            return f"{config.get('cluster_type', 'Fargate')}"
+        elif service == "Amazon EKS":
+            return f"{config.get('node_count', 2)} nodes"
+        elif service == "Amazon EFS":
+            return f"{config.get('storage_gb', 100)}GB"
+        elif service == "Amazon Bedrock":
+            return f"{config.get('input_tokens_million', 10)}M tokens"
+        elif service == "AWS Step Functions":
+            return f"{config.get('state_machines', 1)} workflows"
+        elif service == "Amazon EventBridge":
+            return f"{config.get('event_buses', 1)} bus"
+        elif service == "Amazon SNS":
+            return f"{config.get('topics', 1)} topics"
+        elif service == "Amazon SQS":
+            return f"{config.get('queues', 1)} queues"
         return ""
 
 class DiagramRenderer:
