@@ -15,7 +15,6 @@ import base64
 import io
 import streamlit.components.v1 as components
 import graphviz
-import zlib
 
 # AWS Pricing API configuration
 AWS_PRICING_API_BASE = "https://pricing.us-east-1.amazonaws.com"
@@ -34,8 +33,6 @@ def initialize_session_state():
         st.session_state.timeline_data = {}
     if 'architecture_diagram' not in st.session_state:
         st.session_state.architecture_diagram = None
-    if 'generate_plantuml' not in st.session_state:
-        st.session_state.generate_plantuml = False
 
 # AWS Services configuration
 AWS_SERVICES = {
@@ -654,51 +651,109 @@ class DiagramRenderer:
 
     @staticmethod
     def render_plantuml_diagram(selected_services: Dict, configurations: Dict):
-        """Render PlantUML diagram with SIMPLE working implementation"""
+        """Render PlantUML diagram (converted to image)"""
         st.subheader("🌿 PlantUML Diagram")
         
-        if not selected_services:
-            st.info("Please select some AWS services first.")
-            return
+        plantuml_code = DiagramRenderer._generate_plantuml_code(selected_services, configurations)
         
-        col1, col2 = st.columns([3, 1])
+        if st.button("Generate PlantUML Diagram"):
+            with st.spinner("Generating PlantUML diagram..."):
+                diagram_image = DiagramRenderer._plantuml_to_image(plantuml_code)
+                if diagram_image:
+                    st.image(diagram_image, caption="AWS Architecture Diagram (PlantUML)", use_column_width=True)
         
-        with col2:
-            st.write("**Diagram Options**")
-            if st.button("🔄 Generate PlantUML Diagram", type="primary", key="plantuml_generate"):
-                st.session_state.generate_plantuml = True
-        
-        with col1:
-            if st.session_state.get('generate_plantuml', False):
-                with st.spinner("Generating PlantUML diagram..."):
-                    plantuml_code = DiagramRenderer._generate_simple_plantuml_code(selected_services, configurations)
-                    
-                    # Try multiple methods to generate the diagram
-                    diagram_image = DiagramRenderer._plantuml_simple_method(plantuml_code)
-                    
-                    if diagram_image:
-                        st.image(diagram_image, caption="AWS Architecture Diagram (PlantUML)", use_column_width=True)
-                        st.success("✅ PlantUML diagram generated successfully!")
-                    else:
-                        st.error("❌ Failed to generate PlantUML diagram. Showing code instead.")
-                        st.info("You can copy this code and paste it at: http://www.plantuml.com/plantuml/")
-            
-            # Always show the code
-            with st.expander("📋 View PlantUML Code", expanded=True):
-                plantuml_code = DiagramRenderer._generate_simple_plantuml_code(selected_services, configurations)
-                st.code(plantuml_code, language="plantuml")
-                
-                # Download button for PlantUML code
-                st.download_button(
-                    label="📥 Download PlantUML Code",
-                    data=plantuml_code,
-                    file_name="aws_architecture.puml",
-                    mime="text/plain"
-                )
+        with st.expander("View PlantUML Code"):
+            st.code(plantuml_code, language="plantuml")
 
     @staticmethod
-    def _generate_simple_plantuml_code(selected_services: Dict, configurations: Dict) -> str:
-        """Generate simple PlantUML code without complex AWS icons"""
+    def _generate_plantuml_code(selected_services: Dict, configurations: Dict) -> str:
+        """Generate PlantUML code for the architecture"""
+        plantuml_code = """@startuml
+!define AWSPREFIX https://raw.githubusercontent.com/awslabs/aws-icons-for-plantuml/v14.0/dist
+!includeurl AWSPREFIX/AWSCommon.puml
+
+skinparam nodesep 10
+skinparam ranksep 10
+skinparam defaultTextAlignment center
+skinparam roundcorner 10
+
+rectangle "User" as user
+rectangle "External Systems" as external
+
+cloud AWS {
+"""
+        
+        # Add services
+        for category, services in selected_services.items():
+            if services:
+                plantuml_code += f"  folder {category} {{\n"
+                for service in services:
+                    config = configurations.get(service, {}).get('config', {})
+                    config_text = ProfessionalArchitectureGenerator._get_config_summary(service, config)
+                    
+                    if service == "Amazon EC2":
+                        plantuml_code += f'    EC2("{service}\\n{config_text}") as {service.replace(" ", "")}\n'
+                    elif service == "Amazon S3":
+                        plantuml_code += f'    S3("{service}\\n{config_text}") as {service.replace(" ", "")}\n'
+                    elif service == "Amazon RDS":
+                        plantuml_code += f'    RDS("{service}\\n{config_text}") as {service.replace(" ", "")}\n'
+                    elif service == "AWS Lambda":
+                        plantuml_code += f'    Lambda("{service}\\n{config_text}") as {service.replace(" ", "")}\n'
+                    elif service == "Amazon EKS":
+                        plantuml_code += f'    EKS("{service}\\n{config_text}") as {service.replace(" ", "")}\n'
+                    else:
+                        plantuml_code += f'    rectangle "{service}\\n{config_text}" as {service.replace(" ", "")}\n'
+                plantuml_code += "  }\n"
+        
+        plantuml_code += "}\n\n"
+        
+        # Add connections
+        all_services = []
+        for services in selected_services.values():
+            all_services.extend(services)
+        all_services_with_external = ["User", "External"] + all_services
+        
+        connections = ProfessionalArchitectureGenerator.generate_connections(all_services_with_external)
+        for conn in connections:
+            from_node = conn['from'].replace(" ", "")
+            to_node = conn['to'].replace(" ", "")
+            plantuml_code += f'{from_node} --> {to_node} : {conn["label"]}\n'
+        
+        plantuml_code += "@enduml"
+        return plantuml_code
+
+    @staticmethod
+    def _plantuml_to_image(plantuml_code: str) -> Image:
+        """Convert PlantUML code to image using PlantUML server with correct encoding"""
+        try:
+            # Compress the PlantUML code using DEFLATE algorithm
+            compressed = zlib.compress(plantuml_code.encode('utf-8'))[2:-4]
+            
+            # Encode to base64
+            encoded = base64.b64encode(compressed).decode('utf-8')
+            
+            # Replace characters for PlantUML URL encoding
+            encoded = encoded.translate(bytes.maketrans(
+                b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/",
+                b"0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz-_"
+            ))
+            
+            # Add the ~1 header for HUFFMAN encoding
+            plantuml_url = f"https://www.plantuml.com/plantuml/png/~1{encoded}"
+            
+            response = requests.get(plantuml_url)
+            if response.status_code == 200:
+                return Image.open(io.BytesIO(response.content))
+            else:
+                st.error(f"Failed to generate PlantUML diagram. Status code: {response.status_code}")
+                return None
+        except Exception as e:
+            st.error(f"Error generating PlantUML diagram: {e}")
+            return None
+
+    @staticmethod
+    def _generate_plantuml_code(selected_services: Dict, configurations: Dict) -> str:
+        """Generate PlantUML code for the architecture"""
         plantuml_code = """@startuml
 !define AWSPREFIX https://raw.githubusercontent.com/awslabs/aws-icons-for-plantuml/v14.0/dist
 !includeurl AWSPREFIX/AWSCommon.puml
@@ -712,7 +767,7 @@ skinparam roundcorner 10
 skinparam backgroundColor #FFFFFF
 skinparam shadowing false
 
-actor "User" as user
+rectangle "User" as user
 rectangle "External Systems" as external
 
 cloud AWS {
@@ -721,14 +776,30 @@ cloud AWS {
         # Add services by category
         for category, services in selected_services.items():
             if services:
-                plantuml_code += f"  package \"{category}\" {{\n"
+                plantuml_code += f"  folder {category} {{\n"
                 for service in services:
                     config = configurations.get(service, {}).get('config', {})
                     config_text = ProfessionalArchitectureGenerator._get_config_summary(service, config)
-                    node_name = service.replace(" ", "").replace("Amazon", "").replace("AWS", "")
                     
-                    # Simple rectangle nodes for reliability
-                    plantuml_code += f'    node {node_name} [{service}\\n{config_text}]\n'
+                    # Use AWS icons for common services
+                    if service == "Amazon EC2":
+                        plantuml_code += f'    EC2("{service}\\n{config_text}") as {service.replace(" ", "").replace("Amazon", "")}\n'
+                    elif service == "Amazon S3":
+                        plantuml_code += f'    S3("{service}\\n{config_text}") as {service.replace(" ", "").replace("Amazon", "")}\n'
+                    elif service == "Amazon RDS":
+                        plantuml_code += f'    RDS("{service}\\n{config_text}") as {service.replace(" ", "").replace("Amazon", "")}\n'
+                    elif service == "AWS Lambda":
+                        plantuml_code += f'    Lambda("{service}\\n{config_text}") as {service.replace(" ", "").replace("AWS", "")}\n'
+                    elif service == "Amazon EKS":
+                        plantuml_code += f'    EKS("{service}\\n{config_text}") as {service.replace(" ", "").replace("Amazon", "")}\n'
+                    elif service == "Amazon CloudFront":
+                        plantuml_code += f'    CloudFront("{service}") as {service.replace(" ", "").replace("Amazon", "")}\n'
+                    elif service == "Elastic Load Balancing":
+                        plantuml_code += f'    ElasticLoadBalancing("{service}") as {service.replace(" ", "")}\n'
+                    elif service == "Amazon API Gateway":
+                        plantuml_code += f'    APIGateway("{service}") as {service.replace(" ", "").replace("Amazon", "")}\n'
+                    else:
+                        plantuml_code += f'    rectangle "{service}\\n{config_text}" as {service.replace(" ", "").replace("Amazon", "").replace("AWS", "")}\n'
                 plantuml_code += "  }\n"
         
         plantuml_code += "}\n\n"
@@ -749,58 +820,51 @@ cloud AWS {
         return plantuml_code
 
     @staticmethod
-    def _plantuml_simple_method(plantuml_code: str) -> Image:
-        """Simple POST method to PlantUML server"""
-        try:
-            # Use the online PlantUML server
-            plantuml_url = "http://www.plantuml.com/plantuml/png"
-            
-            # Send the raw PlantUML code as POST data
-            response = requests.post(
-                plantuml_url,
-                data=plantuml_code,
-                headers={'Content-Type': 'text/plain'},
-                timeout=30
+    def render_plantuml_diagram(selected_services: Dict, configurations: Dict):
+        """Render PlantUML diagram with improved error handling"""
+        st.subheader("🌿 PlantUML Diagram")
+        
+        if not selected_services:
+            st.info("Please select some AWS services first.")
+            return
+        
+        col1, col2 = st.columns([3, 1])
+        
+        with col2:
+            st.write("**Diagram Options**")
+            diagram_theme = st.selectbox(
+                "Theme",
+                ["Default", "AWS", "Simple"],
+                key="plantuml_theme"
             )
             
-            if response.status_code == 200:
-                return Image.open(io.BytesIO(response.content))
-            else:
-                st.warning(f"POST method failed with status {response.status_code}")
-                return None
-        except Exception as e:
-            st.warning(f"POST method failed: {e}")
-            return None
-
-    @staticmethod
-    def _plantuml_encoded_method(plantuml_code: str) -> Image:
-        """Alternative method with proper encoding"""
-        try:
-            # Compress the PlantUML code
-            compressed = zlib.compress(plantuml_code.encode('utf-8'))
+            if st.button("🔄 Generate PlantUML Diagram", type="primary"):
+                st.session_state.generate_plantuml = True
+        
+        with col1:
+            if st.session_state.get('generate_plantuml', False):
+                with st.spinner("Generating PlantUML diagram..."):
+                    plantuml_code = DiagramRenderer._generate_plantuml_code(selected_services, configurations)
+                    diagram_image = DiagramRenderer._plantuml_to_image(plantuml_code)
+                    
+                    if diagram_image:
+                        st.image(diagram_image, caption="AWS Architecture Diagram (PlantUML)", use_column_width=True)
+                        st.success("✅ PlantUML diagram generated successfully!")
+                    else:
+                        st.error("❌ Failed to generate PlantUML diagram. Please try again.")
             
-            # Encode to base64
-            encoded = base64.b64encode(compressed).decode('utf-8')
-            
-            # PlantUML uses a special encoding
-            encoded = encoded.translate(str.maketrans(
-                "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/",
-                "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz-_"
-            ))
-            
-            # Use the encoded URL with ~1 prefix
-            plantuml_url = f"http://www.plantuml.com/plantuml/png/~1{encoded}"
-            
-            response = requests.get(plantuml_url, timeout=30)
-            if response.status_code == 200:
-                return Image.open(io.BytesIO(response.content))
-            else:
-                return None
-        except Exception as e:
-            st.warning(f"Encoded method failed: {e}")
-            return None
-
-# ... (rest of your existing classes like YearlyTimelineCalculator, ServiceSelector, DynamicPricingEngine) ...
+            # Always show the code
+            with st.expander("📋 View PlantUML Code", expanded=True):
+                plantuml_code = DiagramRenderer._generate_plantuml_code(selected_services, configurations)
+                st.code(plantuml_code, language="plantuml")
+                
+                # Download button for PlantUML code
+                st.download_button(
+                    label="📥 Download PlantUML Code",
+                    data=plantuml_code,
+                    file_name="aws_architecture.puml",
+                    mime="text/plain"
+                )
 
 class YearlyTimelineCalculator:
     @staticmethod
@@ -908,7 +972,693 @@ class ServiceSelector:
         
         return selected_services
 
-# ... (include the rest of your DynamicPricingEngine class and other functions) ...
+class DynamicPricingEngine:
+    @staticmethod
+    def calculate_service_price(service: str, config: Dict, timeline_config: Dict, requirements: Dict) -> Dict:
+        """Calculate service price with dynamic factors, timeline, and enterprise requirements"""
+        
+        # Apply enterprise requirements to configuration
+        config = DynamicPricingEngine._apply_enterprise_requirements(config, service, requirements)
+        
+        base_price = DynamicPricingEngine._calculate_base_price(service, config, requirements)
+        
+        # Apply scalability pattern adjustments
+        scalability_multiplier = DynamicPricingEngine._get_scalability_multiplier(
+            requirements.get('scalability_needs', 'Fixed Capacity')
+        )
+        
+        # Apply availability requirements
+        availability_multiplier = DynamicPricingEngine._get_availability_multiplier(
+            requirements.get('availability_requirements', '99.9% (Business Hours)')
+        )
+        
+        adjusted_price = base_price * timeline_config["pattern_multiplier"] * scalability_multiplier * availability_multiplier
+        discounted_price = adjusted_price * timeline_config["commitment_discount"]
+        
+        if timeline_config["years"] > 0:
+            yearly_data = DynamicPricingEngine.calculate_yearly_costs(
+                discounted_price, 
+                timeline_config["years"],
+                timeline_config["growth_rate"]
+            )
+        else:
+            yearly_data = {"years": [], "yearly_costs": [], "monthly_costs": [], "cumulative_costs": [], "total_cost": 0.0}
+        
+        if timeline_config["total_months"] > 0:
+            monthly_data = DynamicPricingEngine.calculate_detailed_monthly_timeline(
+                discounted_price,
+                timeline_config["total_months"],
+                timeline_config["growth_rate"]
+            )
+        else:
+            monthly_data = {"months": [], "monthly_costs": [], "cumulative_costs": [], "total_cost": 0.0}
+        
+        return {
+            "base_monthly_cost": base_price,
+            "adjusted_monthly_cost": adjusted_price,
+            "discounted_monthly_cost": discounted_price,
+            "yearly_data": yearly_data,
+            "monthly_data": monthly_data,
+            "total_timeline_cost": monthly_data["total_cost"],
+            "commitment_savings": adjusted_price - discounted_price,
+            "scalability_multiplier": scalability_multiplier,
+            "availability_multiplier": availability_multiplier
+        }
+    
+    @staticmethod
+    def calculate_yearly_costs(base_monthly_cost: float, years: int, growth_rate: float = 0.0) -> Dict:
+        """Calculate costs over years with growth rate"""
+        yearly_data = {
+            "years": [],
+            "yearly_costs": [],
+            "monthly_costs": [],
+            "cumulative_costs": [],
+            "total_cost": 0.0
+        }
+        
+        if years == 0:
+            return yearly_data
+            
+        cumulative = 0.0
+        for year in range(1, years + 1):
+            monthly_cost_year = base_monthly_cost * (1 + growth_rate) ** ((year - 1) * 12)
+            yearly_cost = monthly_cost_year * 12
+            
+            cumulative += yearly_cost
+            
+            yearly_data["years"].append(f"Year {year}")
+            yearly_data["yearly_costs"].append(yearly_cost)
+            yearly_data["monthly_costs"].append(monthly_cost_year)
+            yearly_data["cumulative_costs"].append(cumulative)
+        
+        yearly_data["total_cost"] = cumulative
+        return yearly_data
+    
+    @staticmethod
+    def calculate_detailed_monthly_timeline(base_monthly_cost: float, total_months: int, growth_rate: float = 0.0) -> Dict:
+        """Calculate detailed monthly breakdown"""
+        monthly_data = {
+            "months": [],
+            "monthly_costs": [],
+            "cumulative_costs": [],
+            "total_cost": 0.0
+        }
+        
+        if total_months == 0:
+            return monthly_data
+            
+        cumulative = 0.0
+        for month in range(1, total_months + 1):
+            monthly_cost = base_monthly_cost * (1 + growth_rate) ** (month - 1)
+            cumulative += monthly_cost
+            
+            year = (month - 1) // 12 + 1
+            month_in_year = (month - 1) % 12 + 1
+            monthly_data["months"].append(f"Y{year} M{month_in_year}")
+            monthly_data["monthly_costs"].append(monthly_cost)
+            monthly_data["cumulative_costs"].append(cumulative)
+        
+        monthly_data["total_cost"] = cumulative
+        return monthly_data
+    
+    @staticmethod
+    def _apply_enterprise_requirements(config: Dict, service: str, requirements: Dict) -> Dict:
+        """Apply enterprise defaults based on requirements"""
+        performance_tier = requirements.get('performance_tier', 'Production')
+        workload_complexity = requirements.get('workload_complexity', 'Moderate')
+        
+        # Only apply enterprise defaults if performance tier is Enterprise
+        if performance_tier != 'Enterprise':
+            return config
+        
+        # Enterprise defaults for different services
+        if service == "Amazon EC2":
+            if 'instance_type' not in config or config['instance_type'] in ['t3.micro', 't3.small']:
+                config['instance_type'] = 'm5.xlarge'  # Enterprise default
+            if 'instance_count' not in config or config['instance_count'] < 2:
+                config['instance_count'] = 2  # Minimum 2 for HA
+        
+        elif service == "Amazon RDS":
+            if 'instance_type' not in config or config['instance_type'] in ['db.t3.micro', 'db.t3.small']:
+                config['instance_type'] = 'db.m5.xlarge'  # Enterprise default
+            config['multi_az'] = True  # Enterprise enables Multi-AZ by default
+            config['backup_retention'] = 35  # Longer retention for enterprise
+            if 'storage_gb' not in config or config['storage_gb'] < 100:
+                config['storage_gb'] = 100
+        
+        elif service == "Amazon EBS":
+            if config.get('volume_type', 'gp3') == 'gp3':
+                config['volume_type'] = 'io1'  # Provisioned IOPS for enterprise
+                config['iops'] = 3000
+        
+        elif service == "Amazon ECS":
+            if config.get('cluster_type', 'Fargate') == 'Fargate':
+                config['cpu_units'] = max(config.get('cpu_units', 1024), 2048)
+                config['memory_gb'] = max(config.get('memory_gb', 2), 4)
+        
+        elif service == "Elastic Load Balancing":
+            # Enterprise might need more capacity
+            config['lcu_count'] = config.get('lcu_count', 10000) * 2
+        
+        return config
+    
+    @staticmethod
+    def _get_scalability_multiplier(scalability_pattern: str) -> float:
+        """Get cost multiplier based on scalability pattern"""
+        multipliers = {
+            "Fixed Capacity": 1.0,
+            "Seasonal": 1.3,  # Higher for seasonal scaling needs
+            "Predictable Growth": 1.1,
+            "Unpredictable Burst": 1.5  # Highest for unpredictable bursts
+        }
+        return multipliers.get(scalability_pattern, 1.0)
+    
+    @staticmethod
+    def _get_availability_multiplier(availability: str) -> float:
+        """Get cost multiplier based on availability requirements"""
+        multipliers = {
+            "99.9% (Business Hours)": 1.0,
+            "99.95% (High Availability)": 1.3,
+            "99.99% (Mission Critical)": 1.8
+        }
+        return multipliers.get(availability, 1.0)
+    
+    @staticmethod
+    def _calculate_base_price(service: str, config: Dict, requirements: Dict) -> float:
+        """Calculate base monthly price for service with enterprise considerations"""
+        
+        performance_tier = requirements.get('performance_tier', 'Production')
+        
+        if service == "Amazon EC2":
+            instance_type = config.get('instance_type', 't3.micro')
+            instance_count = config.get('instance_count', 1)
+            
+            # Different pricing tiers based on performance requirements
+            if performance_tier == 'Enterprise':
+                instance_prices = {
+                    't3.micro': 0.0104, 't3.small': 0.0208, 't3.medium': 0.0416,
+                    'm5.large': 0.096, 'm5.xlarge': 0.192, 'm5.2xlarge': 0.384,
+                    'c5.large': 0.085, 'c5.xlarge': 0.17, 'c5.2xlarge': 0.34,
+                    'r5.large': 0.126, 'r5.xlarge': 0.252, 'r5.2xlarge': 0.504
+                }
+            else:
+                instance_prices = {
+                    't3.micro': 0.0104, 't3.small': 0.0208, 't3.medium': 0.0416,
+                    'm5.large': 0.096, 'm5.xlarge': 0.192,
+                    'c5.large': 0.085, 'c5.xlarge': 0.17,
+                    'r5.large': 0.126, 'r5.xlarge': 0.252
+                }
+            
+            base_price = instance_prices.get(instance_type, 0.1) * 730 * instance_count
+            
+            storage_gb = config.get('storage_gb', 30)
+            volume_type = config.get('volume_type', 'gp3')
+            storage_price_per_gb = {
+                'gp3': 0.08, 'gp2': 0.10, 'io1': 0.125, 'io2': 0.125,
+                'st1': 0.045, 'sc1': 0.015
+            }
+            base_price += storage_gb * storage_price_per_gb.get(volume_type, 0.08)
+            
+            # Add provisioned IOPS cost if applicable
+            if volume_type in ['io1', 'io2']:
+                iops = config.get('iops', 3000)
+                base_price += iops * 0.065  # $0.065 per provisioned IOPS
+            
+            return base_price
+            
+        elif service == "Amazon RDS":
+            instance_type = config.get('instance_type', 'db.t3.micro')
+            engine = config.get('engine', 'PostgreSQL')
+            
+            # RDS instance pricing with enterprise considerations
+            if performance_tier == 'Enterprise':
+                rds_prices = {
+                    'db.t3.micro': 0.017, 'db.t3.small': 0.034, 'db.t3.medium': 0.068,
+                    'db.m5.large': 0.17, 'db.m5.xlarge': 0.34, 'db.m5.2xlarge': 0.68,
+                    'db.r5.large': 0.24, 'db.r5.xlarge': 0.48, 'db.r5.2xlarge': 0.96
+                }
+            else:
+                rds_prices = {
+                    'db.t3.micro': 0.017, 'db.t3.small': 0.034, 'db.t3.medium': 0.068,
+                    'db.m5.large': 0.17, 'db.m5.xlarge': 0.34,
+                    'db.r5.large': 0.24, 'db.r5.xlarge': 0.48
+                }
+            
+            # Engine-specific adjustments
+            engine_multipliers = {
+                'PostgreSQL': 1.0,
+                'MySQL': 1.0,
+                'Aurora MySQL': 1.2,
+                'SQL Server': 1.5
+            }
+            
+            base_price = rds_prices.get(instance_type, 0.1) * 730 * engine_multipliers.get(engine, 1.0)
+            
+            # Storage costs
+            storage_gb = config.get('storage_gb', 20)
+            
+            # Use provisioned IOPS storage for enterprise
+            if performance_tier == 'Enterprise':
+                base_price += storage_gb * 0.25  # Higher cost for provisioned IOPS
+                # Add provisioned IOPS cost
+                iops = config.get('iops', 1000)
+                base_price += iops * 0.10  # $0.10 per provisioned IOPS
+            else:
+                base_price += storage_gb * 0.115  # $0.115 per GB-month for standard
+            
+            # Backup storage with longer retention for enterprise
+            backup_retention = config.get('backup_retention', 7)
+            backup_multiplier = 2.0 if backup_retention > 7 else 1.0  # More backups cost more
+            base_price += storage_gb * 0.095 * backup_multiplier
+            
+            # Multi-AZ multiplier
+            if config.get('multi_az', False):
+                base_price *= 2
+            
+            return base_price
+            
+        elif service == "Amazon S3":
+            storage_gb = config.get('storage_gb', 100)
+            storage_class = config.get('storage_class', 'Standard')
+            
+            storage_prices = {
+                'Standard': 0.023, 'Intelligent-Tiering': 0.0125,
+                'Standard-IA': 0.0125, 'One Zone-IA': 0.01,
+                'Glacier': 0.004, 'Glacier Deep Archive': 0.00099
+            }
+            
+            return storage_gb * storage_prices.get(storage_class, 0.023)
+            
+        elif service == "AWS Lambda":
+            memory_mb = config.get('memory_mb', 128)
+            requests = config.get('requests_per_month', 1000000)
+            duration_ms = config.get('avg_duration_ms', 100)
+            
+            # Lambda pricing calculation
+            request_cost = requests * 0.0000002  # $0.20 per 1M requests
+            gb_seconds = (requests * duration_ms * memory_mb) / (1000 * 1024)
+            compute_cost = gb_seconds * 0.0000166667  # $0.0000166667 per GB-second
+            
+            return request_cost + compute_cost
+            
+        elif service == "Amazon ECS":
+            cluster_type = config.get('cluster_type', 'Fargate')
+            
+            if cluster_type == 'Fargate':
+                cpu_units = config.get('cpu_units', 1024)
+                memory_gb = config.get('memory_gb', 2)
+                service_count = config.get('service_count', 3)
+                avg_tasks = config.get('avg_tasks_per_service', 2)
+                
+                # Fargate pricing per vCPU and GB
+                cpu_price_per_hour = 0.04048  # per vCPU per hour
+                memory_price_per_hour = 0.004445  # per GB per hour
+                
+                total_tasks = service_count * avg_tasks
+                monthly_cost = total_tasks * 730 * (cpu_units/1024 * cpu_price_per_hour + memory_gb * memory_price_per_hour)
+                return monthly_cost
+            else:
+                # EC2-based ECS pricing
+                instance_count = config.get('instance_count', 2)
+                instance_type = config.get('ecs_instance_type', 't3.medium')
+                
+                # Use EC2 pricing for the instances
+                ec2_prices = {
+                    't3.medium': 0.0416, 'm5.large': 0.096, 'm5.xlarge': 0.192
+                }
+                
+                base_price = ec2_prices.get(instance_type, 0.1) * 730 * instance_count
+                return base_price
+            
+        elif service == "Amazon EKS":
+            node_count = config.get('node_count', 2)
+            node_type = config.get('node_type', 't3.medium')
+            managed_node_groups = config.get('managed_node_groups', 1)
+            
+            # EKS cluster cost ($0.10 per hour)
+            eks_cluster_cost = 0.10 * 730
+            
+            # Node instance costs
+            node_prices = {
+                't3.medium': 0.0416, 'm5.large': 0.096, 'm5.xlarge': 0.192,
+                'c5.large': 0.085, 'r5.large': 0.126
+            }
+            
+            node_cost = node_prices.get(node_type, 0.1) * 730 * node_count
+            
+            return eks_cluster_cost + node_cost
+            
+        elif service == "Amazon EBS":
+            storage_gb = config.get('storage_gb', 30)
+            volume_type = config.get('volume_type', 'gp3')
+            iops = config.get('iops', 3000) if volume_type in ['io1', 'io2'] else 0
+            
+            storage_price_per_gb = {
+                'gp3': 0.08, 'gp2': 0.10, 'io1': 0.125, 'io2': 0.125,
+                'st1': 0.045, 'sc1': 0.015
+            }
+            
+            base_price = storage_gb * storage_price_per_gb.get(volume_type, 0.08)
+            
+            # Add IOPS cost for provisioned IOPS volumes
+            if volume_type in ['io1', 'io2']:
+                base_price += iops * 0.065  # $0.065 per provisioned IOPS
+            
+            return base_price
+            
+        elif service == "Amazon EFS":
+            storage_gb = config.get('storage_gb', 100)
+            storage_class = config.get('storage_class', 'Standard')
+            
+            efs_prices = {
+                'Standard': 0.30,  # $0.30 per GB-month
+                'Infrequent Access': 0.025  # $0.025 per GB-month
+            }
+            
+            return storage_gb * efs_prices.get(storage_class, 0.30)
+            
+        elif service == "Amazon ElastiCache":
+            node_type = config.get('node_type', 'cache.t3.micro')
+            node_count = config.get('node_count', 1)
+            engine = config.get('engine', 'Redis')
+            
+            cache_prices = {
+                'cache.t3.micro': 0.020, 'cache.t3.small': 0.038, 'cache.t3.medium': 0.076,
+                'cache.m5.large': 0.171, 'cache.r5.large': 0.242
+            }
+            
+            base_price = cache_prices.get(node_type, 0.1) * 730 * node_count
+            
+            # Engine multiplier
+            if engine == 'Memcached':
+                base_price *= 0.9  # Memcached is slightly cheaper
+            
+            return base_price
+            
+        elif service == "Amazon CloudFront":
+            data_transfer_tb = config.get('data_transfer_tb', 50)
+            requests_million = config.get('requests_million', 10)
+            
+            # Data transfer pricing (per GB)
+            data_transfer_cost = data_transfer_tb * 1024 * 0.085  # $0.085 per GB
+            
+            # Request pricing (per 10,000 requests)
+            request_cost = requests_million * 100 * 0.0075  # $0.0075 per 10,000 requests
+            
+            return data_transfer_cost + request_cost
+            
+        elif service == "Elastic Load Balancing":
+            lb_type = config.get('lb_type', 'Application Load Balancer')
+            lcu_count = config.get('lcu_count', 10000)
+            data_processed_tb = config.get('data_processed_tb', 10)
+            
+            if lb_type == 'Application Load Balancer':
+                # ALB pricing: $0.0225 per ALB-hour + $0.008 per LCU-hour
+                alb_hourly = 0.0225 * 730  # $0.0225 per hour
+                lcu_cost = lcu_count * 0.008  # $0.008 per LCU-hour
+                return alb_hourly + lcu_cost
+            else:
+                # NLB pricing: $0.0225 per NLB-hour + $0.006 per NLCU-hour
+                nlb_hourly = 0.0225 * 730  # $0.0225 per hour
+                nlcu_cost = lcu_count * 0.006  # $0.006 per NLCU-hour
+                return nlb_hourly + nlcu_cost
+            
+        elif service == "Amazon VPC":
+            vpc_count = config.get('vpc_count', 1)
+            nat_gateways = config.get('nat_gateways', 2)
+            vpc_endpoints = config.get('vpc_endpoints', 5)
+            vpn_connections = config.get('vpn_connections', 0)
+            
+            # VPC is free, but associated services have costs
+            nat_cost = nat_gateways * 0.045 * 730  # $0.045 per NAT Gateway-hour
+            endpoint_cost = vpc_endpoints * 0.01 * 730  # $0.01 per endpoint-hour
+            vpn_cost = vpn_connections * 0.05 * 730  # $0.05 per VPN connection-hour
+            
+            return nat_cost + endpoint_cost + vpn_cost
+            
+        elif service == "AWS WAF":
+            web_acls = config.get('web_acls', 2)
+            rules_per_acl = config.get('rules_per_acl', 10)
+            requests_billion = config.get('requests_billion', 1.0)
+            managed_rules = config.get('managed_rules', True)
+            
+            web_acl_cost = web_acls * 5.00  # $5.00 per web ACL per month
+            rule_cost = web_acls * rules_per_acl * 1.00  # $1.00 per rule per month
+            request_cost = requests_billion * 0.60  # $0.60 per million requests
+            managed_rule_cost = web_acls * 1.00 if managed_rules else 0  # $1.00 per managed rule set
+            
+            return web_acl_cost + rule_cost + request_cost + managed_rule_cost
+            
+        elif service == "AWS Shield":
+            protection_level = config.get('protection_level', 'Standard')
+            protected_resources = config.get('protected_resources', 5)
+            
+            if protection_level == 'Standard':
+                # Shield Standard is free
+                return 0
+            else:
+                # Shield Advanced: $3000 per month + $XXX per protected resource
+                shield_advanced_cost = 3000  # $3000 per month
+                resource_cost = protected_resources * 100  # $100 per protected resource
+                return shield_advanced_cost + resource_cost
+            
+        elif service == "Amazon GuardDuty":
+            data_sources = config.get('data_sources', ['CloudTrail', 'VPC', 'DNS'])
+            protected_accounts = config.get('protected_accounts', 1)
+            
+            # GuardDuty pricing per GB of data analyzed
+            cloudtrail_cost = 1.00 if 'CloudTrail' in data_sources else 0  # $1.00 per GB
+            vpc_cost = 0.50 if 'VPC' in data_sources else 0  # $0.50 per GB
+            dns_cost = 0.50 if 'DNS' in data_sources else 0  # $0.50 per GB
+            
+            # Estimate data volumes (simplified)
+            estimated_data_gb = 100  # Simplified estimate
+            
+            base_cost = (cloudtrail_cost + vpc_cost + dns_cost) * estimated_data_gb
+            
+            # Multi-account multiplier
+            if protected_accounts > 1:
+                base_cost *= protected_accounts * 0.8  # Volume discount
+            
+            return base_cost
+            
+        elif service == "Amazon SageMaker":
+            usage_type = config.get('usage_type', 'Training')
+            training_hours = config.get('training_hours', 100)
+            inference_hours = config.get('inference_hours', 1000)
+            notebook_hours = config.get('notebook_hours', 160)
+            storage_gb = config.get('storage_gb', 500)
+            
+            base_cost = 0
+            
+            if usage_type in ['Training', 'All']:
+                # ml.m5.xlarge instance: $0.269 per hour
+                base_cost += training_hours * 0.269
+            
+            if usage_type in ['Inference', 'All']:
+                # ml.m5.large instance: $0.134 per hour
+                base_cost += inference_hours * 0.134
+            
+            if usage_type in ['Notebooks', 'All']:
+                # ml.t3.medium instance: $0.0582 per hour
+                base_cost += notebook_hours * 0.0582
+            
+            # EBS storage for models and data
+            base_cost += storage_gb * 0.23  # $0.23 per GB-month
+            
+            return base_cost
+            
+        elif service == "Amazon Bedrock":
+            input_tokens_million = config.get('input_tokens_million', 10)
+            output_tokens_million = config.get('output_tokens_million', 5)
+            custom_models = config.get('custom_models', 0)
+            fine_tuning_hours = config.get('fine_tuning_hours', 0)
+            
+            # Claude model pricing (example)
+            input_cost = input_tokens_million * 0.80  # $0.80 per million input tokens
+            output_cost = output_tokens_million * 4.00  # $4.00 per million output tokens
+            custom_model_cost = custom_models * 100  # $100 per custom model per month
+            fine_tuning_cost = fine_tuning_hours * 50  # $50 per fine-tuning hour
+            
+            return input_cost + output_cost + custom_model_cost + fine_tuning_cost
+        
+        # Default case for services without specific pricing
+        return 0.0
+
+def render_service_configurator(service: str, key_prefix: str) -> Dict:
+    """Render configuration options for selected service"""
+    config = {}
+    
+    if service == "Amazon EC2":
+        st.write("**Instance Configuration**")
+        
+        instance_families = {
+            "General Purpose": {
+                "t3.micro": {"vCPU": 2, "Memory": 1, "Description": "Burstable, low cost"},
+                "t3.small": {"vCPU": 2, "Memory": 2, "Description": "Burstable, small workloads"},
+                "t3.medium": {"vCPU": 2, "Memory": 4, "Description": "Burstable, medium workloads"},
+                "m5.large": {"vCPU": 2, "Memory": 8, "Description": "General purpose, balanced"},
+                "m5.xlarge": {"vCPU": 4, "Memory": 16, "Description": "General purpose, high performance"}
+            },
+            "Compute Optimized": {
+                "c5.large": {"vCPU": 2, "Memory": 4, "Description": "Compute intensive workloads"},
+                "c5.xlarge": {"vCPU": 4, "Memory": 8, "Description": "High performance compute"}
+            },
+            "Memory Optimized": {
+                "r5.large": {"vCPU": 2, "Memory": 16, "Description": "Memory intensive applications"},
+                "r5.xlarge": {"vCPU": 4, "Memory": 32, "Description": "High memory workloads"}
+            }
+        }
+        
+        selected_family = st.selectbox(
+            "Instance Family",
+            list(instance_families.keys()),
+            key=f"{key_prefix}_family"
+        )
+        
+        if selected_family:
+            instance_options = instance_families[selected_family]
+            selected_instance = st.selectbox(
+                "Instance Type",
+                list(instance_options.keys()),
+                format_func=lambda x: f"{x} ({instance_options[x]['vCPU']} vCPU, {instance_options[x]['Memory']}GB) - {instance_options[x]['Description']}",
+                key=f"{key_prefix}_instance_type"
+            )
+            config['instance_type'] = selected_instance
+            
+            config['instance_count'] = st.slider(
+                "Number of Instances",
+                min_value=1,
+                max_value=20,
+                value=2,
+                key=f"{key_prefix}_instance_count"
+            )
+            
+            st.write("**Storage Configuration**")
+            config['storage_gb'] = st.slider(
+                "Storage (GB)",
+                min_value=20,
+                max_value=1000,
+                value=100,
+                step=10,
+                key=f"{key_prefix}_storage_gb"
+            )
+            
+            config['volume_type'] = st.selectbox(
+                "Volume Type",
+                ["gp3", "gp2", "io1", "io2", "st1", "sc1"],
+                index=0,
+                key=f"{key_prefix}_volume_type"
+            )
+            
+            if config['volume_type'] in ['io1', 'io2']:
+                config['iops'] = st.slider(
+                    "Provisioned IOPS",
+                    min_value=100,
+                    max_value=16000,
+                    value=3000,
+                    step=100,
+                    key=f"{key_prefix}_iops"
+                )
+    
+    elif service == "Amazon RDS":
+        st.write("**Database Configuration**")
+        
+        config['engine'] = st.selectbox(
+            "Database Engine",
+            ["PostgreSQL", "MySQL", "Aurora MySQL", "SQL Server"],
+            key=f"{key_prefix}_engine"
+        )
+        
+        instance_types = {
+            "db.t3.micro": "Burstable micro instance",
+            "db.t3.small": "Burstable small instance", 
+            "db.t3.medium": "Burstable medium instance",
+            "db.m5.large": "General purpose large",
+            "db.m5.xlarge": "General purpose xlarge",
+            "db.r5.large": "Memory optimized large"
+        }
+        
+        config['instance_type'] = st.selectbox(
+            "Instance Type",
+            list(instance_types.keys()),
+            format_func=lambda x: f"{x} - {instance_types[x]}",
+            key=f"{key_prefix}_rds_instance"
+        )
+        
+        config['storage_gb'] = st.slider(
+            "Storage (GB)",
+            min_value=20,
+            max_value=1000,
+            value=100,
+            key=f"{key_prefix}_rds_storage"
+        )
+        
+        config['multi_az'] = st.checkbox(
+            "Multi-AZ Deployment",
+            value=False,
+            key=f"{key_prefix}_multi_az"
+        )
+        
+        config['backup_retention'] = st.slider(
+            "Backup Retention (days)",
+            min_value=1,
+            max_value=35,
+            value=7,
+            key=f"{key_prefix}_backup_retention"
+        )
+    
+    elif service == "Amazon S3":
+        st.write("**Storage Configuration**")
+        
+        config['storage_gb'] = st.slider(
+            "Storage Capacity (GB)",
+            min_value=10,
+            max_value=10000,
+            value=1000,
+            step=10,
+            key=f"{key_prefix}_s3_storage"
+        )
+        
+        config['storage_class'] = st.selectbox(
+            "Storage Class",
+            ["Standard", "Intelligent-Tiering", "Standard-IA", "One Zone-IA", "Glacier", "Glacier Deep Archive"],
+            key=f"{key_prefix}_storage_class"
+        )
+    
+    elif service == "AWS Lambda":
+        st.write("**Function Configuration**")
+        
+        config['memory_mb'] = st.slider(
+            "Memory (MB)",
+            min_value=128,
+            max_value=10240,
+            value=512,
+            step=128,
+            key=f"{key_prefix}_memory"
+        )
+        
+        config['requests_per_month'] = st.slider(
+            "Monthly Requests",
+            min_value=100000,
+            max_value=10000000,
+            value=1000000,
+            step=100000,
+            key=f"{key_prefix}_requests"
+        )
+        
+        config['avg_duration_ms'] = st.slider(
+            "Average Duration (ms)",
+            min_value=50,
+            max_value=10000,
+            value=200,
+            step=50,
+            key=f"{key_prefix}_duration"
+        )
+    
+    # Add configuration for other services as needed...
+    
+    return config
 
 def main():
     st.set_page_config(
@@ -922,8 +1672,192 @@ def main():
     
     initialize_session_state()
     
-    # Your existing main function implementation continues here...
-    # ... (rest of your main function code)
+    # TIMELINE CONFIGURATION
+    timeline_config = YearlyTimelineCalculator.render_timeline_selector()
+    
+    # PROJECT REQUIREMENTS SECTION
+    with st.expander("📋 Project Requirements & Architecture", expanded=True):
+        st.write("**Define Your Project Requirements**")
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.subheader("Workload Profile")
+            workload_complexity = st.select_slider(
+                "Workload Complexity",
+                options=["Simple", "Moderate", "Complex", "Enterprise"],
+                value="Moderate",
+                help="Complexity of your application architecture"
+            )
+            
+            performance_tier = st.select_slider(
+                "Performance Tier",
+                options=["Development", "Testing", "Production", "Enterprise"],
+                value="Production"
+            )
+            
+        with col2:
+            st.subheader("Scalability & Availability")
+            scalability_needs = st.selectbox(
+                "Scalability Pattern",
+                ["Fixed Capacity", "Seasonal", "Predictable Growth", "Unpredictable Burst"]
+            )
+            
+            availability_requirements = st.selectbox(
+                "Availability Requirements",
+                ["99.9% (Business Hours)", "99.95% (High Availability)", "99.99% (Mission Critical)"]
+            )
+    
+    # Store requirements for pricing calculations
+    requirements = {
+        'workload_complexity': workload_complexity,
+        'performance_tier': performance_tier,
+        'scalability_needs': scalability_needs,
+        'availability_requirements': availability_requirements
+    }
+    
+    # SERVICE SELECTION
+    st.session_state.selected_services = ServiceSelector.render_service_selection()
+    
+    if st.session_state.selected_services:
+        st.header("⚙️ Service Configuration")
+        
+        st.session_state.total_cost = 0
+        st.session_state.configurations = {}
+        
+        for category, services in st.session_state.selected_services.items():
+            st.subheader(f"{category}")
+            
+            for i, service in enumerate(services):
+                with st.expander(f"🔧 {service}", expanded=True):
+                    st.write(f"*{AWS_SERVICES[category][service]}*")
+                    
+                    service_key = f"{category}_{service}_{i}"
+                    
+                    if service_key not in st.session_state:
+                        st.session_state[service_key] = {}
+                    
+                    # Render service configuration
+                    config = render_service_configurator(service, service_key)
+                    st.session_state[service_key].update(config)
+                    
+                    # Calculate pricing with timeline AND requirements
+                    pricing_result = DynamicPricingEngine.calculate_service_price(
+                        service, 
+                        st.session_state[service_key],
+                        timeline_config,
+                        requirements
+                    )
+                    
+                    # Display pricing information with enterprise factors
+                    col1, col2, col3, col4 = st.columns(4)
+                    with col1:
+                        st.metric("Base Monthly", f"${pricing_result['base_monthly_cost']:,.2f}")
+                    with col2:
+                        st.metric("Adjusted Monthly", f"${pricing_result['adjusted_monthly_cost']:,.2f}")
+                    with col3:
+                        st.metric("After Commitment", f"${pricing_result['discounted_monthly_cost']:,.2f}")
+                    with col4:
+                        st.metric(f"Total {timeline_config['timeline_type']}", 
+                                 f"${pricing_result['total_timeline_cost']:,.2f}")
+                    
+                    # Show enterprise factors if applicable
+                    if pricing_result.get('scalability_multiplier', 1.0) > 1.0 or pricing_result.get('availability_multiplier', 1.0) > 1.0:
+                        st.caption(f"📈 Scalability factor: {pricing_result.get('scalability_multiplier', 1.0):.1f}x | "
+                                 f"🛡️ Availability factor: {pricing_result.get('availability_multiplier', 1.0):.1f}x")
+                    
+                    # Store configuration
+                    st.session_state.configurations[service] = {
+                        "config": st.session_state[service_key],
+                        "pricing": pricing_result
+                    }
+                    
+                    # Add to total cost
+                    st.session_state.total_cost += pricing_result['total_timeline_cost']
+        
+        # MULTIPLE DIAGRAM VIEWS
+        st.header("🎨 Architecture Diagrams")
+        
+        diagram_tabs = st.tabs(["Professional HTML", "Mermaid.js", "Graphviz", "PlantUML"])
+        
+        with diagram_tabs[0]:
+            # Generate professional diagram
+            html_diagram = ProfessionalArchitectureGenerator.generate_professional_diagram_html(
+                st.session_state.selected_services,
+                st.session_state.configurations,
+                requirements
+            )
+            
+            # Display the professional diagram
+            st.subheader("📐 Professional Architecture Diagram")
+            components.html(html_diagram, height=1000, scrolling=True)
+        
+        with diagram_tabs[1]:
+            DiagramRenderer.render_mermaid_diagram(
+                st.session_state.selected_services,
+                st.session_state.configurations
+            )
+        
+        with diagram_tabs[2]:
+            DiagramRenderer.render_graphviz_diagram(
+                st.session_state.selected_services,
+                st.session_state.configurations
+            )
+        
+        with diagram_tabs[3]:
+            DiagramRenderer.render_plantuml_diagram(
+                st.session_state.selected_services,
+                st.session_state.configurations
+            )
+        
+        # TOTAL COST SUMMARY
+        st.header("💰 Total Cost Summary")
+        
+        col1, col2, col3 = st.columns(3)
+        
+        with col1:
+            st.metric(
+                "Total Estimated Cost", 
+                f"${st.session_state.total_cost:,.2f}",
+                f"for {timeline_config['timeline_type']}"
+            )
+        
+        with col2:
+            avg_monthly = st.session_state.total_cost / timeline_config['total_months'] if timeline_config['total_months'] > 0 else 0
+            st.metric("Average Monthly Cost", f"${avg_monthly:,.2f}")
+        
+        with col3:
+            commitment_savings = sum(
+                config['pricing'].get('commitment_savings', 0) * timeline_config['total_months'] 
+                for config in st.session_state.configurations.values()
+            )
+            st.metric("Commitment Savings", f"${commitment_savings:,.2f}")
+        
+        # Cost breakdown using native Streamlit charts
+        st.subheader("📊 Cost Breakdown by Service")
+        
+        cost_data = []
+        for service, config in st.session_state.configurations.items():
+            cost_data.append({
+                'Service': service,
+                'Total Cost': config['pricing']['total_timeline_cost'],
+                'Monthly Cost': config['pricing']['discounted_monthly_cost']
+            })
+        
+        if cost_data:
+            cost_df = pd.DataFrame(cost_data)
+            st.dataframe(cost_df, use_container_width=True)
+            
+            # Use Streamlit native bar chart
+            st.bar_chart(cost_df.set_index('Service')['Total Cost'])
+            
+            # Pie chart for cost distribution
+            st.subheader("🥧 Cost Distribution")
+            st.plotly_chart(
+                px.pie(cost_df, values='Total Cost', names='Service', 
+                      title='Cost Distribution by Service'),
+                use_container_width=True
+            )
 
 if __name__ == "__main__":
     main()
