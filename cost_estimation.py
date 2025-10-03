@@ -724,23 +724,147 @@ cloud AWS {
 
     @staticmethod
     def _plantuml_to_image(plantuml_code: str) -> Image:
-        """Convert PlantUML code to image using PlantUML server"""
+        """Convert PlantUML code to image using PlantUML server with correct encoding"""
         try:
-            # Encode the PlantUML code
-            encoded = base64.b64encode(plantuml_code.encode('utf-8')).decode('utf-8')
+            # Compress the PlantUML code using DEFLATE algorithm
+            compressed = zlib.compress(plantuml_code.encode('utf-8'))[2:-4]
             
-            # PlantUML server URL
-            plantuml_url = f"http://www.plantuml.com/plantuml/png/{encoded}"
+            # Encode to base64
+            encoded = base64.b64encode(compressed).decode('utf-8')
+            
+            # Replace characters for PlantUML URL encoding
+            encoded = encoded.translate(bytes.maketrans(
+                b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/",
+                b"0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz-_"
+            ))
+            
+            # Add the ~1 header for HUFFMAN encoding
+            plantuml_url = f"https://www.plantuml.com/plantuml/png/~1{encoded}"
             
             response = requests.get(plantuml_url)
             if response.status_code == 200:
                 return Image.open(io.BytesIO(response.content))
             else:
-                st.error("Failed to generate PlantUML diagram")
+                st.error(f"Failed to generate PlantUML diagram. Status code: {response.status_code}")
                 return None
         except Exception as e:
             st.error(f"Error generating PlantUML diagram: {e}")
             return None
+
+    @staticmethod
+    def _generate_plantuml_code(selected_services: Dict, configurations: Dict) -> str:
+        """Generate PlantUML code for the architecture"""
+        plantuml_code = """@startuml
+!define AWSPREFIX https://raw.githubusercontent.com/awslabs/aws-icons-for-plantuml/v14.0/dist
+!includeurl AWSPREFIX/AWSCommon.puml
+
+title AWS Architecture Diagram
+
+skinparam nodesep 10
+skinparam ranksep 10
+skinparam defaultTextAlignment center
+skinparam roundcorner 10
+skinparam backgroundColor #FFFFFF
+skinparam shadowing false
+
+rectangle "User" as user
+rectangle "External Systems" as external
+
+cloud AWS {
+"""
+        
+        # Add services by category
+        for category, services in selected_services.items():
+            if services:
+                plantuml_code += f"  folder {category} {{\n"
+                for service in services:
+                    config = configurations.get(service, {}).get('config', {})
+                    config_text = ProfessionalArchitectureGenerator._get_config_summary(service, config)
+                    
+                    # Use AWS icons for common services
+                    if service == "Amazon EC2":
+                        plantuml_code += f'    EC2("{service}\\n{config_text}") as {service.replace(" ", "").replace("Amazon", "")}\n'
+                    elif service == "Amazon S3":
+                        plantuml_code += f'    S3("{service}\\n{config_text}") as {service.replace(" ", "").replace("Amazon", "")}\n'
+                    elif service == "Amazon RDS":
+                        plantuml_code += f'    RDS("{service}\\n{config_text}") as {service.replace(" ", "").replace("Amazon", "")}\n'
+                    elif service == "AWS Lambda":
+                        plantuml_code += f'    Lambda("{service}\\n{config_text}") as {service.replace(" ", "").replace("AWS", "")}\n'
+                    elif service == "Amazon EKS":
+                        plantuml_code += f'    EKS("{service}\\n{config_text}") as {service.replace(" ", "").replace("Amazon", "")}\n'
+                    elif service == "Amazon CloudFront":
+                        plantuml_code += f'    CloudFront("{service}") as {service.replace(" ", "").replace("Amazon", "")}\n'
+                    elif service == "Elastic Load Balancing":
+                        plantuml_code += f'    ElasticLoadBalancing("{service}") as {service.replace(" ", "")}\n'
+                    elif service == "Amazon API Gateway":
+                        plantuml_code += f'    APIGateway("{service}") as {service.replace(" ", "").replace("Amazon", "")}\n'
+                    else:
+                        plantuml_code += f'    rectangle "{service}\\n{config_text}" as {service.replace(" ", "").replace("Amazon", "").replace("AWS", "")}\n'
+                plantuml_code += "  }\n"
+        
+        plantuml_code += "}\n\n"
+        
+        # Add connections
+        all_services = []
+        for services in selected_services.values():
+            all_services.extend(services)
+        all_services_with_external = ["User", "External"] + all_services
+        
+        connections = ProfessionalArchitectureGenerator.generate_connections(all_services_with_external)
+        for conn in connections:
+            from_node = conn['from'].replace(" ", "").replace("Amazon", "").replace("AWS", "")
+            to_node = conn['to'].replace(" ", "").replace("Amazon", "").replace("AWS", "")
+            plantuml_code += f'{from_node} --> {to_node} : {conn["label"]}\n'
+        
+        plantuml_code += "@enduml"
+        return plantuml_code
+
+    @staticmethod
+    def render_plantuml_diagram(selected_services: Dict, configurations: Dict):
+        """Render PlantUML diagram with improved error handling"""
+        st.subheader("🌿 PlantUML Diagram")
+        
+        if not selected_services:
+            st.info("Please select some AWS services first.")
+            return
+        
+        col1, col2 = st.columns([3, 1])
+        
+        with col2:
+            st.write("**Diagram Options**")
+            diagram_theme = st.selectbox(
+                "Theme",
+                ["Default", "AWS", "Simple"],
+                key="plantuml_theme"
+            )
+            
+            if st.button("🔄 Generate PlantUML Diagram", type="primary"):
+                st.session_state.generate_plantuml = True
+        
+        with col1:
+            if st.session_state.get('generate_plantuml', False):
+                with st.spinner("Generating PlantUML diagram..."):
+                    plantuml_code = DiagramRenderer._generate_plantuml_code(selected_services, configurations)
+                    diagram_image = DiagramRenderer._plantuml_to_image(plantuml_code)
+                    
+                    if diagram_image:
+                        st.image(diagram_image, caption="AWS Architecture Diagram (PlantUML)", use_column_width=True)
+                        st.success("✅ PlantUML diagram generated successfully!")
+                    else:
+                        st.error("❌ Failed to generate PlantUML diagram. Please try again.")
+            
+            # Always show the code
+            with st.expander("📋 View PlantUML Code", expanded=True):
+                plantuml_code = DiagramRenderer._generate_plantuml_code(selected_services, configurations)
+                st.code(plantuml_code, language="plantuml")
+                
+                # Download button for PlantUML code
+                st.download_button(
+                    label="📥 Download PlantUML Code",
+                    data=plantuml_code,
+                    file_name="aws_architecture.puml",
+                    mime="text/plain"
+                )
 
 class YearlyTimelineCalculator:
     @staticmethod
