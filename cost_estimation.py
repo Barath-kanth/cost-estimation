@@ -674,7 +674,7 @@ class DiagramRenderer:
                     plantuml_code = DiagramRenderer._generate_working_plantuml_code(selected_services, configurations)
                     
                     # Try multiple methods to generate the diagram
-                    diagram_image = DiagramRenderer._plantuml_simple_method(plantuml_code)
+                    diagram_image = DiagramRenderer._plantuml_robust_method(plantuml_code)
                     
                     if diagram_image:
                         st.image(diagram_image, caption="AWS Architecture Diagram (PlantUML)", use_column_width=True)
@@ -688,6 +688,10 @@ class DiagramRenderer:
                 plantuml_code = DiagramRenderer._generate_working_plantuml_code(selected_services, configurations)
                 st.code(plantuml_code, language="plantuml")
                 
+                # Create a clickable link to the PlantUML online editor
+                encoded_url = DiagramRenderer._create_plantuml_online_url(plantuml_code)
+                st.markdown(f"**Quick Preview:** [Open in PlantUML Online Editor]({encoded_url})")
+                
                 # Download button for PlantUML code
                 st.download_button(
                     label="📥 Download PlantUML Code",
@@ -698,10 +702,24 @@ class DiagramRenderer:
 
     @staticmethod
     def _generate_working_plantuml_code(selected_services: Dict, configurations: Dict) -> str:
-        """Generate WORKING PlantUML code using simplified syntax without external dependencies"""
+        """Generate WORKING PlantUML code using simplified syntax"""
         
-        # Define AWS colors
         plantuml_code = """@startuml
+skinparam backgroundColor #FFFFFF
+skinparam shadowing false
+skinparam arrowColor #232F3E
+skinparam arrowFontColor #232F3E
+skinparam arrowFontSize 12
+skinparam defaultTextAlignment center
+skinparam roundcorner 10
+skinparam nodesep 20
+skinparam ranksep 20
+
+title AWS Architecture Diagram
+
+!define AWSPUML https://raw.githubusercontent.com/awslabs/aws-icons-for-plantuml/v18.0/dist
+
+' Define colors
 !define AWSColor #FF9900
 !define EC2Color #EC7211
 !define LambdaColor #FF9900
@@ -710,41 +728,54 @@ class DiagramRenderer:
 !define KinesisColor #8B4789
 !define CloudFrontColor #C925D1
 !define VPCColor #232F3E
+!define UserColor #6B7280
+!define ExternalColor #9CA3AF
 
-skinparam rectangle {
-    BackgroundColor<<EC2>> EC2Color
-    BackgroundColor<<Lambda>> LambdaColor
-    BackgroundColor<<S3>> S3Color
-    BackgroundColor<<RDS>> RDSColor
-    BackgroundColor<<Kinesis>> KinesisColor
-    BackgroundColor<<CloudFront>> CloudFrontColor
-    BackgroundColor<<VPC>> VPCColor
-    BackgroundColor<<User>> #6B7280
-    BackgroundColor<<External>> #9CA3AF
+skinparam rectangle<<EC2>> {
+    BackgroundColor EC2Color
     BorderColor #232F3E
     FontColor #FFFFFF
     RoundCorner 10
-    Shadowing false
 }
 
-skinparam arrow {
-    Color #232F3E
-    FontColor #232F3E
-    FontSize 12
+skinparam rectangle<<Lambda>> {
+    BackgroundColor LambdaColor
+    BorderColor #232F3E
+    FontColor #FFFFFF
+    RoundCorner 10
 }
 
-title AWS Architecture Diagram
+skinparam rectangle<<S3>> {
+    BackgroundColor S3Color
+    BorderColor #232F3E
+    FontColor #FFFFFF
+    RoundCorner 10
+}
 
-skinparam nodesep 20
-skinparam ranksep 20
-skinparam defaultTextAlignment center
-skinparam roundcorner 15
-skinparam backgroundColor #FFFFFF
-skinparam shadowing false
+skinparam rectangle<<RDS>> {
+    BackgroundColor RDSColor
+    BorderColor #232F3E
+    FontColor #FFFFFF
+    RoundCorner 10
+}
+
+skinparam rectangle<<User>> {
+    BackgroundColor UserColor
+    BorderColor #232F3E
+    FontColor #FFFFFF
+    RoundCorner 10
+}
+
+skinparam rectangle<<External>> {
+    BackgroundColor ExternalColor
+    BorderColor #232F3E
+    FontColor #FFFFFF
+    RoundCorner 10
+}
 
 ' External entities
-rectangle "User" as user <<User>>
-rectangle "External Systems" as external <<External>>
+rectangle "👤 User" as user <<User>>
+rectangle "🌐 External Systems" as external <<External>>
 
 """
         
@@ -754,7 +785,7 @@ rectangle "External Systems" as external <<External>>
         
         for category, services in selected_services.items():
             if services:
-                plantuml_code += f"rectangle \"{category}\" {{\n"
+                plantuml_code += f"package \"{category}\" {{\n"
                 
                 for service in services:
                     config = configurations.get(service, {}).get('config', {})
@@ -775,9 +806,9 @@ rectangle "External Systems" as external <<External>>
                     elif "Kinesis" in service:
                         service_type = "Kinesis"
                     elif "CloudFront" in service:
-                        service_type = "CloudFront"
+                        service_type = "EC2"  # Fallback
                     elif "VPC" in service:
-                        service_type = "VPC"
+                        service_type = "EC2"  # Fallback
                     
                     display_name = service.replace("Amazon ", "").replace("AWS ", "")
                     label = f"{display_name}\\n{config_text}" if config_text else display_name
@@ -805,6 +836,69 @@ rectangle "External Systems" as external <<External>>
         
         plantuml_code += "@enduml"
         return plantuml_code
+
+    @staticmethod
+    def _plantuml_robust_method(plantuml_code: str) -> Image:
+        """Robust method to generate PlantUML diagram with proper error handling"""
+        try:
+            # Method 1: Try encoded URL first (most reliable)
+            encoded_url = DiagramRenderer._create_plantuml_online_url(plantuml_code)
+            response = requests.get(encoded_url, timeout=30)
+            
+            if response.status_code == 200:
+                # Check if response is actually an image
+                if response.headers.get('content-type', '').startswith('image/'):
+                    image = Image.open(io.BytesIO(response.content))
+                    # Verify it's a valid image by checking size
+                    if image.size[0] > 10 and image.size[1] > 10:
+                        return image
+            
+            # Method 2: Try POST method as fallback
+            plantuml_url = "https://www.plantuml.com/plantuml/png"
+            response = requests.post(
+                plantuml_url,
+                data=plantuml_code,
+                headers={'Content-Type': 'text/plain'},
+                timeout=30
+            )
+            
+            if response.status_code == 200:
+                if response.headers.get('content-type', '').startswith('image/'):
+                    image = Image.open(io.BytesIO(response.content))
+                    if image.size[0] > 10 and image.size[1] > 10:
+                        return image
+            
+            # If we get here, both methods failed
+            st.warning("PlantUML server returned non-image response")
+            return None
+            
+        except Exception as e:
+            st.warning(f"PlantUML generation failed: {str(e)}")
+            return None
+
+    @staticmethod
+    def _create_plantuml_online_url(plantuml_code: str) -> str:
+        """Create encoded URL for PlantUML online editor"""
+        try:
+            # Compress the PlantUML code
+            compressed = zlib.compress(plantuml_code.encode('utf-8'))
+            
+            # Encode to base64
+            encoded = base64.b64encode(compressed).decode('utf-8')
+            
+            # PlantUML uses a special encoding
+            encoded = encoded.translate(str.maketrans(
+                "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/",
+                "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz-_"
+            ))
+            
+            return f"https://www.plantuml.com/plantuml/png/~1{encoded}"
+            
+        except Exception as e:
+            st.warning(f"URL encoding failed: {e}")
+            # Fallback to simple encoding
+            simple_encoded = base64.b64encode(plantuml_code.encode()).decode()
+            return f"https://www.plantuml.com/plantuml/png/{simple_encoded}"
 
     @staticmethod
     def _generate_simple_plantuml_code(selected_services: Dict, configurations: Dict) -> str:
