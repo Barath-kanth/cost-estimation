@@ -15,7 +15,6 @@ import base64
 import io
 import streamlit.components.v1 as components
 import graphviz
-import zlib
 
 # AWS Pricing API configuration
 AWS_PRICING_API_BASE = "https://pricing.us-east-1.amazonaws.com"
@@ -34,8 +33,6 @@ def initialize_session_state():
         st.session_state.timeline_data = {}
     if 'architecture_diagram' not in st.session_state:
         st.session_state.architecture_diagram = None
-    if 'generate_plantuml' not in st.session_state:
-        st.session_state.generate_plantuml = False
 
 # AWS Services configuration
 AWS_SERVICES = {
@@ -651,154 +648,6 @@ class DiagramRenderer:
         
         # Display Graphviz diagram
         st.graphviz_chart(dot.source)
-
-    @staticmethod
-    def render_plantuml_diagram(selected_services: Dict, configurations: Dict):
-        """Render PlantUML diagram with SIMPLE working implementation"""
-        st.subheader("🌿 PlantUML Diagram")
-        
-        if not selected_services:
-            st.info("Please select some AWS services first.")
-            return
-        
-        col1, col2 = st.columns([3, 1])
-        
-        with col2:
-            st.write("**Diagram Options**")
-            if st.button("🔄 Generate PlantUML Diagram", type="primary", key="plantuml_generate"):
-                st.session_state.generate_plantuml = True
-        
-        with col1:
-            if st.session_state.get('generate_plantuml', False):
-                with st.spinner("Generating PlantUML diagram..."):
-                    plantuml_code = DiagramRenderer._generate_simple_plantuml_code(selected_services, configurations)
-                    
-                    # Try multiple methods to generate the diagram
-                    diagram_image = DiagramRenderer._plantuml_simple_method(plantuml_code)
-                    
-                    if diagram_image:
-                        st.image(diagram_image, caption="AWS Architecture Diagram (PlantUML)", use_column_width=True)
-                        st.success("✅ PlantUML diagram generated successfully!")
-                    else:
-                        st.error("❌ Failed to generate PlantUML diagram. Showing code instead.")
-                        st.info("You can copy this code and paste it at: http://www.plantuml.com/plantuml/")
-            
-            # Always show the code
-            with st.expander("📋 View PlantUML Code", expanded=True):
-                plantuml_code = DiagramRenderer._generate_simple_plantuml_code(selected_services, configurations)
-                st.code(plantuml_code, language="plantuml")
-                
-                # Download button for PlantUML code
-                st.download_button(
-                    label="📥 Download PlantUML Code",
-                    data=plantuml_code,
-                    file_name="aws_architecture.puml",
-                    mime="text/plain"
-                )
-
-    @staticmethod
-    def _generate_simple_plantuml_code(selected_services: Dict, configurations: Dict) -> str:
-        """Generate simple PlantUML code without complex AWS icons"""
-        plantuml_code = """@startuml
-!define AWSPREFIX https://raw.githubusercontent.com/awslabs/aws-icons-for-plantuml/v14.0/dist
-!includeurl AWSPREFIX/AWSCommon.puml
-
-title AWS Architecture Diagram
-
-skinparam nodesep 10
-skinparam ranksep 10
-skinparam defaultTextAlignment center
-skinparam roundcorner 10
-skinparam backgroundColor #FFFFFF
-skinparam shadowing false
-
-actor "User" as user
-rectangle "External Systems" as external
-
-cloud AWS {
-"""
-        
-        # Add services by category
-        for category, services in selected_services.items():
-            if services:
-                plantuml_code += f"  package \"{category}\" {{\n"
-                for service in services:
-                    config = configurations.get(service, {}).get('config', {})
-                    config_text = ProfessionalArchitectureGenerator._get_config_summary(service, config)
-                    node_name = service.replace(" ", "").replace("Amazon", "").replace("AWS", "")
-                    
-                    # Simple rectangle nodes for reliability
-                    plantuml_code += f'    node {node_name} [{service}\\n{config_text}]\n'
-                plantuml_code += "  }\n"
-        
-        plantuml_code += "}\n\n"
-        
-        # Add connections
-        all_services = []
-        for services in selected_services.values():
-            all_services.extend(services)
-        all_services_with_external = ["User", "External"] + all_services
-        
-        connections = ProfessionalArchitectureGenerator.generate_connections(all_services_with_external)
-        for conn in connections:
-            from_node = conn['from'].replace(" ", "").replace("Amazon", "").replace("AWS", "")
-            to_node = conn['to'].replace(" ", "").replace("Amazon", "").replace("AWS", "")
-            plantuml_code += f'{from_node} --> {to_node} : {conn["label"]}\n'
-        
-        plantuml_code += "@enduml"
-        return plantuml_code
-
-    @staticmethod
-    def _plantuml_simple_method(plantuml_code: str) -> Image:
-        """Simple POST method to PlantUML server"""
-        try:
-            # Use the online PlantUML server
-            plantuml_url = "http://www.plantuml.com/plantuml/png"
-            
-            # Send the raw PlantUML code as POST data
-            response = requests.post(
-                plantuml_url,
-                data=plantuml_code,
-                headers={'Content-Type': 'text/plain'},
-                timeout=30
-            )
-            
-            if response.status_code == 200:
-                return Image.open(io.BytesIO(response.content))
-            else:
-                st.warning(f"POST method failed with status {response.status_code}")
-                return None
-        except Exception as e:
-            st.warning(f"POST method failed: {e}")
-            return None
-
-    @staticmethod
-    def _plantuml_encoded_method(plantuml_code: str) -> Image:
-        """Alternative method with proper encoding"""
-        try:
-            # Compress the PlantUML code
-            compressed = zlib.compress(plantuml_code.encode('utf-8'))
-            
-            # Encode to base64
-            encoded = base64.b64encode(compressed).decode('utf-8')
-            
-            # PlantUML uses a special encoding
-            encoded = encoded.translate(str.maketrans(
-                "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/",
-                "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz-_"
-            ))
-            
-            # Use the encoded URL with ~1 prefix
-            plantuml_url = f"http://www.plantuml.com/plantuml/png/~1{encoded}"
-            
-            response = requests.get(plantuml_url, timeout=30)
-            if response.status_code == 200:
-                return Image.open(io.BytesIO(response.content))
-            else:
-                return None
-        except Exception as e:
-            st.warning(f"Encoded method failed: {e}")
-            return None
 
 class YearlyTimelineCalculator:
     @staticmethod
@@ -1715,7 +1564,7 @@ def main():
         # Diagram type selection
         diagram_type = st.selectbox(
             "Select Diagram Type",
-            ["Professional HTML", "Mermaid.js", "Graphviz", "PlantUML"],
+            ["Professional HTML", "Mermaid.js", "Graphviz"],
             index=0,
             help="Choose the type of architecture diagram to generate"
         )
@@ -1757,9 +1606,6 @@ def main():
         
         elif diagram_type == "Graphviz":
             DiagramRenderer.render_graphviz_diagram(st.session_state.selected_services, st.session_state.configurations)
-        
-        elif diagram_type == "PlantUML":
-            DiagramRenderer.render_plantuml_diagram(st.session_state.selected_services, st.session_state.configurations)
         
         # TOTAL COST SUMMARY
         st.header("💰 Total Cost Summary")
