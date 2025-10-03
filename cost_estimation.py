@@ -87,44 +87,94 @@ class ProfessionalArchitectureGenerator:
     @staticmethod
     def get_service_icon_url(service_name: str) -> str:
         """Get real AWS icon URL from icon.icepanel.io"""
+        # Comprehensive icon mapping with multiple possible names
         icon_mapping = {
-            "Amazon EC2": "https://icon.icepanel.io/AWS/svg/Compute/EC2.svg",
-            "AWS Lambda": "https://icon.icepanel.io/AWS/svg/Compute/Lambda.svg",
-            "Amazon ECS": "https://icon.icepanel.io/AWS/svg/Compute/Elastic-Container-Service.svg",
-            "Amazon EKS": "https://icon.icepanel.io/AWS/svg/Compute/Elastic-Kubernetes-Service.svg",
-            "Amazon S3": "https://icon.icepanel.io/AWS/svg/Storage/Simple-Storage-Service.svg",
-            "Amazon EBS": "https://icon.icepanel.io/AWS/svg/Storage/Elastic-Block-Store.svg",
-            "Amazon EFS": "https://icon.icepanel.io/AWS/svg/Storage/Elastic-File-System.svg",
-            "Amazon RDS": "https://icon.icepanel.io/AWS/svg/Database/RDS.svg",
-            "Amazon DynamoDB": "https://icon.icepanel.io/AWS/svg/Database/DynamoDB.svg",
-            "Amazon ElastiCache": "https://icon.icepanel.io/AWS/svg/Database/ElastiCache.svg",
-            "Amazon OpenSearch": "https://icon.icepanel.io/AWS/svg/Analytics/OpenSearch-Service.svg",
-            "Amazon Bedrock": "https://icon.icepanel.io/AWS/svg/Machine-Learning/Bedrock.svg",
-            "Amazon SageMaker": "https://icon.icepanel.io/AWS/svg/Machine-Learning/SageMaker.svg",
-            "Amazon Kinesis": "https://icon.icepanel.io/AWS/svg/Analytics/Kinesis.svg",
-            "AWS Glue": "https://icon.icepanel.io/AWS/svg/Analytics/Glue.svg",
-            "Amazon Redshift": "https://icon.icepanel.io/AWS/svg/Analytics/Redshift.svg",
-            "Amazon VPC": "https://icon.icepanel.io/AWS/svg/Networking-Content-Delivery/Virtual-Private-Cloud.svg",
-            "Amazon CloudFront": "https://icon.icepanel.io/AWS/svg/Networking-Content-Delivery/CloudFront.svg",
-            "Elastic Load Balancing": "https://icon.icepanel.io/AWS/svg/Networking-Content-Delivery/Elastic-Load-Balancing.svg",
-            "Amazon API Gateway": "https://icon.icepanel.io/AWS/svg/Networking-Content-Delivery/API-Gateway.svg",
-            "AWS WAF": "https://icon.icepanel.io/AWS/svg/Security-Identity-Compliance/WAF.svg",
-            "Amazon GuardDuty": "https://icon.icepanel.io/AWS/svg/Security-Identity-Compliance/GuardDuty.svg",
-            "AWS Shield": "https://icon.icepanel.io/AWS/svg/Security-Identity-Compliance/Shield.svg",
-            "AWS Step Functions": "https://icon.icepanel.io/AWS/svg/Application-Integration/Step-Functions.svg",
-            "Amazon EventBridge": "https://icon.icepanel.io/AWS/svg/Application-Integration/EventBridge.svg",
-            "Amazon SNS": "https://icon.icepanel.io/AWS/svg/Application-Integration/Simple-Notification-Service.svg",
-            "Amazon SQS": "https://icon.icepanel.io/AWS/svg/Application-Integration/Simple-Queue-Service.svg",
+            # External/User
             "User": "https://icon.icepanel.io/AWS/svg/General-Icons/User.svg",
             "External": "https://icon.icepanel.io/AWS/svg/General-Icons/Internet-alt1.svg",
+            
+            # Compute
+            "Amazon EC2": "https://icon.icepanel.io/AWS/svg/Compute/EC2.svg",
+            "EC2": "https://icon.icepanel.io/AWS/svg/Compute/EC2.svg",
+            "AWS Lambda": "https://icon.icepanel.io/AWS/svg/Compute/Lambda.svg",
+            "Lambda": "https://icon.icepanel.io/AWS/svg/Compute/Lambda.svg",
+            "Amazon ECS": "https://icon.icepanel.io/AWS/svg/Compute/Elastic-Container-Service.svg",
+            "ECS": "https://icon.icepanel.io/AWS/svg/Compute/Elastic-Container-Service.svg",
+            "Amazon EKS": "https://icon.icepanel.io/AWS/svg/Compute/Elastic-Kubernetes-Service.svg",
+            "EKS": "https://icon.icepanel.io/AWS/svg/Compute/Elastic-Kubernetes-Service.svg",
+            
+            # Storage
+            "Amazon S3": "https://icon.icepanel.io/AWS/svg/Storage/Simple-Storage-Service.svg",
+            "S3": "https://icon.icepanel.io/AWS/svg/Storage/Simple-Storage-Service.svg",
+            "Amazon EBS": "https://icon.icepanel.io/AWS/svg/Storage/Elastic-Block-Store.svg",
+            "EBS": "https://icon.icepanel.io/AWS/svg/Storage/Elastic-Block-Store.svg",
+            "Amazon EFS": "https://icon.icepanel.io/AWS/svg/Storage/Elastic-File-System.svg",
+            "EFS": "https://icon.icepanel.io/AWS/svg/Storage/Elastic-File-System.svg",
+            
+            # Database
+            "Amazon RDS": "https://icon.icepanel.io/AWS/svg/Database/RDS.svg",
+            "RDS": "https://icon.icepanel.io/AWS/svg/Database/RDS.svg",
+            "Amazon DynamoDB": "https://icon.icepanel.io/AWS/svg/Database/DynamoDB.svg",
+            "DynamoDB": "https://icon.icepanel.io/AWS/svg/Database/DynamoDB.svg",
+            "Amazon ElastiCache": "https://icon.icepanel.io/AWS/svg/Database/ElastiCache.svg",
+            "ElastiCache": "https://icon.icepanel.io/AWS/svg/Database/ElastiCache.svg",
+            "Amazon OpenSearch": "https://icon.icepanel.io/AWS/svg/Analytics/OpenSearch-Service.svg",
+            "OpenSearch": "https://icon.icepanel.io/AWS/svg/Analytics/OpenSearch-Service.svg",
+            
+            # AI/ML
+            "Amazon Bedrock": "https://icon.icepanel.io/AWS/svg/Machine-Learning/Bedrock.svg",
+            "Bedrock": "https://icon.icepanel.io/AWS/svg/Machine-Learning/Bedrock.svg",
+            "Amazon SageMaker": "https://icon.icepanel.io/AWS/svg/Machine-Learning/SageMaker.svg",
+            "SageMaker": "https://icon.icepanel.io/AWS/svg/Machine-Learning/SageMaker.svg",
+            
+            # Analytics
+            "Amazon Kinesis": "https://icon.icepanel.io/AWS/svg/Analytics/Kinesis.svg",
+            "Kinesis": "https://icon.icepanel.io/AWS/svg/Analytics/Kinesis.svg",
+            "AWS Glue": "https://icon.icepanel.io/AWS/svg/Analytics/Glue.svg",
+            "Glue": "https://icon.icepanel.io/AWS/svg/Analytics/Glue.svg",
+            "Amazon Redshift": "https://icon.icepanel.io/AWS/svg/Analytics/Redshift.svg",
+            "Redshift": "https://icon.icepanel.io/AWS/svg/Analytics/Redshift.svg",
+            
+            # Networking
+            "Amazon VPC": "https://icon.icepanel.io/AWS/svg/Networking-Content-Delivery/Virtual-Private-Cloud.svg",
+            "VPC": "https://icon.icepanel.io/AWS/svg/Networking-Content-Delivery/Virtual-Private-Cloud.svg",
+            "Amazon CloudFront": "https://icon.icepanel.io/AWS/svg/Networking-Content-Delivery/CloudFront.svg",
+            "CloudFront": "https://icon.icepanel.io/AWS/svg/Networking-Content-Delivery/CloudFront.svg",
+            "Elastic Load Balancing": "https://icon.icepanel.io/AWS/svg/Networking-Content-Delivery/Elastic-Load-Balancing.svg",
+            "Load Balancing": "https://icon.icepanel.io/AWS/svg/Networking-Content-Delivery/Elastic-Load-Balancing.svg",
+            "Amazon API Gateway": "https://icon.icepanel.io/AWS/svg/Networking-Content-Delivery/API-Gateway.svg",
             "API Gateway": "https://icon.icepanel.io/AWS/svg/Networking-Content-Delivery/API-Gateway.svg",
+            
+            # Security
+            "AWS WAF": "https://icon.icepanel.io/AWS/svg/Security-Identity-Compliance/WAF.svg",
+            "WAF": "https://icon.icepanel.io/AWS/svg/Security-Identity-Compliance/WAF.svg",
+            "Amazon GuardDuty": "https://icon.icepanel.io/AWS/svg/Security-Identity-Compliance/GuardDuty.svg",
+            "GuardDuty": "https://icon.icepanel.io/AWS/svg/Security-Identity-Compliance/GuardDuty.svg",
+            "AWS Shield": "https://icon.icepanel.io/AWS/svg/Security-Identity-Compliance/Shield.svg",
+            "Shield": "https://icon.icepanel.io/AWS/svg/Security-Identity-Compliance/Shield.svg",
+            
+            # Application Integration
+            "AWS Step Functions": "https://icon.icepanel.io/AWS/svg/Application-Integration/Step-Functions.svg",
             "Step Functions": "https://icon.icepanel.io/AWS/svg/Application-Integration/Step-Functions.svg",
+            "Amazon EventBridge": "https://icon.icepanel.io/AWS/svg/Application-Integration/EventBridge.svg",
             "EventBridge": "https://icon.icepanel.io/AWS/svg/Application-Integration/EventBridge.svg",
+            "Amazon SNS": "https://icon.icepanel.io/AWS/svg/Application-Integration/Simple-Notification-Service.svg",
             "SNS": "https://icon.icepanel.io/AWS/svg/Application-Integration/Simple-Notification-Service.svg",
+            "Amazon SQS": "https://icon.icepanel.io/AWS/svg/Application-Integration/Simple-Queue-Service.svg",
             "SQS": "https://icon.icepanel.io/AWS/svg/Application-Integration/Simple-Queue-Service.svg",
-            "Bedrock": "https://icon.icepanel.io/AWS/svg/Machine-Learning/Bedrock.svg"
         }
-        return icon_mapping.get(service_name, "https://icon.icepanel.io/AWS/svg/General-Icons/General.svg")
+        
+        # Try exact match first
+        if service_name in icon_mapping:
+            return icon_mapping[service_name]
+        
+        # Try to find by removing "Amazon" and "AWS" prefixes
+        simplified_name = service_name.replace("Amazon ", "").replace("AWS ", "").strip()
+        if simplified_name in icon_mapping:
+            return icon_mapping[simplified_name]
+        
+        # Fallback to general icon
+        return "https://icon.icepanel.io/AWS/svg/General-Icons/General.svg"
     
     @staticmethod
     def generate_connections(selected_services: List[str]) -> List[Dict]:
@@ -694,6 +744,10 @@ class DiagramRenderer:
         
         # Display Graphviz diagram
         st.graphviz_chart(dot.source)
+
+# ... (rest of the code remains the same, including YearlyTimelineCalculator, ServiceSelector, DynamicPricingEngine, render_service_configurator, and main function)
+
+# The rest of your existing code for YearlyTimelineCalculator, ServiceSelector, DynamicPricingEngine, render_service_configurator, and main function remains exactly the same...
 
 class YearlyTimelineCalculator:
     @staticmethod
