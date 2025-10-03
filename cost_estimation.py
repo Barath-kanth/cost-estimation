@@ -15,9 +15,303 @@ import base64
 import io
 import streamlit.components.v1 as components
 import graphviz
+import boto3
+from botocore.config import Config
+import openpyxl
+from reportlab.lib.pagesizes import letter
+from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+from reportlab.lib.styles import getSampleStyleSheet
+from reportlab.lib import colors
+import io as reportlab_io
 
 # AWS Pricing API configuration
-AWS_PRICING_API_BASE = "https://pricing.us-east-1.amazonaws.com"
+AWS_PRICING_API_BASE = "https://api.pricing.us-east-1.amazonaws.com"
+AWS_REGION = 'eu-west-2'  # London region
+
+class AWSPricingAPI:
+    """Class to interact with AWS Pricing API"""
+    
+    @staticmethod
+    @st.cache_data(ttl=3600)  # Cache for 1 hour
+    def get_ec2_pricing(instance_type: str, region: str = AWS_REGION) -> float:
+        """Get EC2 pricing from AWS Pricing API"""
+        try:
+            # Use AWS Price List API
+            pricing_client = boto3.client('pricing', region_name='us-east-1')
+            
+            response = pricing_client.get_products(
+                ServiceCode='AmazonEC2',
+                Filters=[
+                    {'Type': 'TERM_MATCH', 'Field': 'instanceType', 'Value': instance_type},
+                    {'Type': 'TERM_MATCH', 'Field': 'location', 'Value': 'EU (London)'},
+                    {'Type': 'TERM_MATCH', 'Field': 'operatingSystem', 'Value': 'Linux'},
+                    {'Type': 'TERM_MATCH', 'Field': 'tenancy', 'Value': 'Shared'},
+                    {'Type': 'TERM_MATCH', 'Field': 'preInstalledSw', 'Value': 'NA'},
+                    {'Type': 'TERM_MATCH', 'Field': 'capacitystatus', 'Value': 'Used'}
+                ],
+                MaxResults=1
+            )
+            
+            if response['PriceList']:
+                price_item = json.loads(response['PriceList'][0])
+                terms = price_item['terms']
+                
+                # Get On-Demand pricing
+                for term_type in ['OnDemand']:
+                    if term_type in terms:
+                        for term_key, term_value in terms[term_type].items():
+                            price_dimensions = term_value['priceDimensions']
+                            for dimension_key, dimension_value in price_dimensions.items():
+                                if 'pricePerUnit' in dimension_value and 'USD' in dimension_value['pricePerUnit']:
+                                    return float(dimension_value['pricePerUnit']['USD'])
+            
+            # Fallback to static pricing if API fails
+            return AWSPricingAPI.get_ec2_fallback_pricing(instance_type)
+            
+        except Exception as e:
+            st.warning(f"Could not fetch EC2 pricing from API: {e}. Using fallback pricing.")
+            return AWSPricingAPI.get_ec2_fallback_pricing(instance_type)
+    
+    @staticmethod
+    def get_ec2_fallback_pricing(instance_type: str) -> float:
+        """Fallback EC2 pricing for London region"""
+        london_prices = {
+            't3.micro': 0.0112, 't3.small': 0.0224, 't3.medium': 0.0448,
+            't3.large': 0.0896, 't3.xlarge': 0.1792, 't3.2xlarge': 0.3584,
+            'm5.large': 0.107, 'm5.xlarge': 0.214, 'm5.2xlarge': 0.428,
+            'm5.4xlarge': 0.856, 'm5.8xlarge': 1.712, 'm5.12xlarge': 2.568,
+            'c5.large': 0.093, 'c5.xlarge': 0.186, 'c5.2xlarge': 0.372,
+            'c5.4xlarge': 0.744, 'c5.9xlarge': 1.674, 'c5.12xlarge': 2.232,
+            'r5.large': 0.133, 'r5.xlarge': 0.266, 'r5.2xlarge': 0.532,
+            'r5.4xlarge': 1.064, 'r5.8xlarge': 2.128, 'r5.12xlarge': 3.192,
+            'i3.large': 0.156, 'i3.xlarge': 0.312, 'i3.2xlarge': 0.624,
+            'i3.4xlarge': 1.248, 'i3.8xlarge': 2.496, 'i3.16xlarge': 4.992
+        }
+        return london_prices.get(instance_type, 0.1)
+    
+    @staticmethod
+    @st.cache_data(ttl=3600)
+    def get_rds_pricing(instance_type: str, engine: str, region: str = AWS_REGION) -> float:
+        """Get RDS pricing from AWS Pricing API"""
+        try:
+            pricing_client = boto3.client('pricing', region_name='us-east-1')
+            
+            # Map engines to their service codes
+            engine_map = {
+                'PostgreSQL': 'postgres',
+                'MySQL': 'mysql',
+                'Aurora MySQL': 'mysql',
+                'SQL Server': 'sqlserver'
+            }
+            
+            response = pricing_client.get_products(
+                ServiceCode='AmazonRDS',
+                Filters=[
+                    {'Type': 'TERM_MATCH', 'Field': 'instanceType', 'Value': instance_type},
+                    {'Type': 'TERM_MATCH', 'Field': 'location', 'Value': 'EU (London)'},
+                    {'Type': 'TERM_MATCH', 'Field': 'databaseEngine', 'Value': engine_map.get(engine, engine)},
+                    {'Type': 'TERM_MATCH', 'Field': 'deploymentOption', 'Value': 'Single-AZ'}
+                ],
+                MaxResults=1
+            )
+            
+            if response['PriceList']:
+                price_item = json.loads(response['PriceList'][0])
+                terms = price_item['terms']
+                
+                for term_type in ['OnDemand']:
+                    if term_type in terms:
+                        for term_key, term_value in terms[term_type].items():
+                            price_dimensions = term_value['priceDimensions']
+                            for dimension_key, dimension_value in price_dimensions.items():
+                                if 'pricePerUnit' in dimension_value and 'USD' in dimension_value['pricePerUnit']:
+                                    return float(dimension_value['pricePerUnit']['USD'])
+            
+            return AWSPricingAPI.get_rds_fallback_pricing(instance_type, engine)
+            
+        except Exception as e:
+            st.warning(f"Could not fetch RDS pricing from API: {e}. Using fallback pricing.")
+            return AWSPricingAPI.get_rds_fallback_pricing(instance_type, engine)
+    
+    @staticmethod
+    def get_rds_fallback_pricing(instance_type: str, engine: str) -> float:
+        """Fallback RDS pricing for London region"""
+        base_prices = {
+            'db.t3.micro': 0.018, 'db.t3.small': 0.036, 'db.t3.medium': 0.072,
+            'db.t3.large': 0.144, 'db.m5.large': 0.182, 'db.m5.xlarge': 0.364,
+            'db.m5.2xlarge': 0.728, 'db.m5.4xlarge': 1.456, 'db.r5.large': 0.258,
+            'db.r5.xlarge': 0.516, 'db.r5.2xlarge': 1.032, 'db.r5.4xlarge': 2.064
+        }
+        
+        base_price = base_prices.get(instance_type, 0.2)
+        
+        # Engine multipliers for London
+        engine_multipliers = {
+            'PostgreSQL': 1.0,
+            'MySQL': 1.0,
+            'Aurora MySQL': 1.2,
+            'SQL Server': 1.8
+        }
+        
+        return base_price * engine_multipliers.get(engine, 1.0)
+    
+    @staticmethod
+    @st.cache_data(ttl=3600)
+    def get_s3_pricing(storage_class: str, region: str = AWS_REGION) -> float:
+        """Get S3 pricing for London region"""
+        london_s3_prices = {
+            'Standard': 0.023,  # per GB-month
+            'Intelligent-Tiering': 0.0125,
+            'Standard-IA': 0.0125,
+            'One Zone-IA': 0.01,
+            'Glacier': 0.004,
+            'Glacier Deep Archive': 0.00099
+        }
+        return london_s3_prices.get(storage_class, 0.023)
+    
+    @staticmethod
+    @st.cache_data(ttl=3600)
+    def get_lambda_pricing(region: str = AWS_REGION) -> Dict[str, float]:
+        """Get Lambda pricing for London region"""
+        return {
+            'request_price': 0.0000002,  # $0.20 per 1M requests
+            'compute_price': 0.0000166667,  # $0.0000166667 per GB-second
+            'additional_charges': 0.000009  # Additional charges for London
+        }
+    
+    @staticmethod
+    @st.cache_data(ttl=3600)
+    def get_ebs_pricing(volume_type: str, region: str = AWS_REGION) -> Dict[str, float]:
+        """Get EBS pricing for London region"""
+        london_ebs_prices = {
+            'gp3': {'storage': 0.08, 'iops': 0.005, 'throughput': 0.04},
+            'gp2': {'storage': 0.10, 'iops': 0.0, 'throughput': 0.0},
+            'io1': {'storage': 0.125, 'iops': 0.065, 'throughput': 0.0},
+            'io2': {'storage': 0.125, 'iops': 0.065, 'throughput': 0.0},
+            'st1': {'storage': 0.045, 'iops': 0.0, 'throughput': 0.0},
+            'sc1': {'storage': 0.015, 'iops': 0.0, 'throughput': 0.0}
+        }
+        return london_ebs_prices.get(volume_type, london_ebs_prices['gp3'])
+    
+    @staticmethod
+    @st.cache_data(ttl=3600)
+    def get_cloudfront_pricing(region: str = AWS_REGION) -> Dict[str, float]:
+        """Get CloudFront pricing for London region"""
+        return {
+            'data_transfer': 0.085,  # per GB
+            'requests': 0.0075,  # per 10,000 requests
+            'regional_charges': 0.002  # Additional regional charges
+        }
+
+class ExportManager:
+    """Handle export of cost estimates to Excel and PDF"""
+    
+    @staticmethod
+    def export_to_excel(configurations: Dict, total_cost: float, timeline_config: Dict) -> bytes:
+        """Export cost estimates to Excel format"""
+        output = io.BytesIO()
+        
+        with pd.ExcelWriter(output, engine='openpyxl') as writer:
+            # Summary sheet
+            summary_data = []
+            for service, config in configurations.items():
+                pricing = config['pricing']
+                summary_data.append({
+                    'Service': service,
+                    'Monthly Cost ($)': pricing['discounted_monthly_cost'],
+                    'Total Timeline Cost ($)': pricing['total_timeline_cost'],
+                    'Configuration': str(config['config'])
+                })
+            
+            summary_df = pd.DataFrame(summary_data)
+            summary_df.to_excel(writer, sheet_name='Cost Summary', index=False)
+            
+            # Monthly breakdown
+            if configurations:
+                first_service = list(configurations.keys())[0]
+                monthly_data = configurations[first_service]['pricing']['monthly_data']
+                
+                monthly_df = pd.DataFrame({
+                    'Month': monthly_data['months'],
+                    'Monthly Cost ($)': monthly_data['monthly_costs'],
+                    'Cumulative Cost ($)': monthly_data['cumulative_costs']
+                })
+                monthly_df.to_excel(writer, sheet_name='Monthly Breakdown', index=False)
+            
+            # Timeline configuration
+            timeline_df = pd.DataFrame([{
+                'Timeline Period': timeline_config['timeline_type'],
+                'Total Months': timeline_config['total_months'],
+                'Usage Pattern': timeline_config['usage_pattern'],
+                'Growth Rate': f"{timeline_config['growth_rate'] * 100}%",
+                'Commitment Type': timeline_config['commitment_type'],
+                'Total Estimated Cost ($)': total_cost
+            }])
+            timeline_df.to_excel(writer, sheet_name='Timeline Config', index=False)
+        
+        return output.getvalue()
+    
+    @staticmethod
+    def export_to_pdf(configurations: Dict, total_cost: float, timeline_config: Dict) -> bytes:
+        """Export cost estimates to PDF format"""
+        buffer = reportlab_io.BytesIO()
+        doc = SimpleDocTemplate(buffer, pagesize=letter)
+        elements = []
+        styles = getSampleStyleSheet()
+        
+        # Title
+        title = Paragraph("AWS Cost Estimate Report", styles['Title'])
+        elements.append(title)
+        elements.append(Spacer(1, 12))
+        
+        # Summary section
+        elements.append(Paragraph("Cost Summary", styles['Heading2']))
+        
+        summary_data = [['Service', 'Monthly Cost ($)', 'Total Timeline Cost ($)']]
+        for service, config in configurations.items():
+            pricing = config['pricing']
+            summary_data.append([
+                service,
+                f"{pricing['discounted_monthly_cost']:,.2f}",
+                f"{pricing['total_timeline_cost']:,.2f}"
+            ])
+        
+        summary_table = Table(summary_data)
+        summary_table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (-1, 0), 12),
+            ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+            ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
+            ('GRID', (0, 0), (-1, -1), 1, colors.black)
+        ]))
+        elements.append(summary_table)
+        elements.append(Spacer(1, 12))
+        
+        # Timeline configuration
+        elements.append(Paragraph("Timeline Configuration", styles['Heading2']))
+        timeline_data = [
+            ['Parameter', 'Value'],
+            ['Timeline Period', timeline_config['timeline_type']],
+            ['Total Months', str(timeline_config['total_months'])],
+            ['Usage Pattern', timeline_config['usage_pattern']],
+            ['Growth Rate', f"{timeline_config['growth_rate'] * 100}%"],
+            ['Commitment Type', timeline_config['commitment_type']],
+            ['Total Estimated Cost', f"${total_cost:,.2f}"]
+        ]
+        
+        timeline_table = Table(timeline_data)
+        timeline_table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.lightblue),
+            ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+            ('GRID', (0, 0), (-1, -1), 1, colors.black)
+        ]))
+        elements.append(timeline_table)
+        
+        doc.build(elements)
+        return buffer.getvalue()
 
 def initialize_session_state():
     """Initialize session state variables"""
@@ -970,6 +1264,28 @@ class ServiceSelector:
 
 class DynamicPricingEngine:
     @staticmethod
+    def get_current_pricing(service: str, region: str = AWS_REGION):
+        """Connect to AWS Pricing API for real-time data"""
+        try:
+            if service == "Amazon EC2":
+                return AWSPricingAPI.get_ec2_pricing
+            elif service == "Amazon RDS":
+                return AWSPricingAPI.get_rds_pricing
+            elif service == "Amazon S3":
+                return AWSPricingAPI.get_s3_pricing
+            elif service == "AWS Lambda":
+                return AWSPricingAPI.get_lambda_pricing
+            elif service == "Amazon EBS":
+                return AWSPricingAPI.get_ebs_pricing
+            elif service == "Amazon CloudFront":
+                return AWSPricingAPI.get_cloudfront_pricing
+            else:
+                return None
+        except Exception as e:
+            st.warning(f"Could not fetch pricing for {service}: {e}")
+            return None
+
+    @staticmethod
     def calculate_service_price(service: str, config: Dict, timeline_config: Dict, requirements: Dict) -> Dict:
         """Calculate service price with dynamic factors, timeline, and enterprise requirements"""
         
@@ -1149,36 +1465,21 @@ class DynamicPricingEngine:
             instance_type = config.get('instance_type', 't3.micro')
             instance_count = config.get('instance_count', 1)
             
-            # Different pricing tiers based on performance requirements
-            if performance_tier == 'Enterprise':
-                instance_prices = {
-                    't3.micro': 0.0104, 't3.small': 0.0208, 't3.medium': 0.0416,
-                    'm5.large': 0.096, 'm5.xlarge': 0.192, 'm5.2xlarge': 0.384,
-                    'c5.large': 0.085, 'c5.xlarge': 0.17, 'c5.2xlarge': 0.34,
-                    'r5.large': 0.126, 'r5.xlarge': 0.252, 'r5.2xlarge': 0.504
-                }
-            else:
-                instance_prices = {
-                    't3.micro': 0.0104, 't3.small': 0.0208, 't3.medium': 0.0416,
-                    'm5.large': 0.096, 'm5.xlarge': 0.192,
-                    'c5.large': 0.085, 'c5.xlarge': 0.17,
-                    'r5.large': 0.126, 'r5.xlarge': 0.252
-                }
+            # Get real-time pricing from AWS API
+            hourly_price = AWSPricingAPI.get_ec2_pricing(instance_type, AWS_REGION)
+            base_price = hourly_price * 730 * instance_count  # 730 hours per month
             
-            base_price = instance_prices.get(instance_type, 0.1) * 730 * instance_count
-            
+            # Add storage costs
             storage_gb = config.get('storage_gb', 30)
             volume_type = config.get('volume_type', 'gp3')
-            storage_price_per_gb = {
-                'gp3': 0.08, 'gp2': 0.10, 'io1': 0.125, 'io2': 0.125,
-                'st1': 0.045, 'sc1': 0.015
-            }
-            base_price += storage_gb * storage_price_per_gb.get(volume_type, 0.08)
+            ebs_pricing = AWSPricingAPI.get_ebs_pricing(volume_type, AWS_REGION)
+            
+            base_price += storage_gb * ebs_pricing['storage']
             
             # Add provisioned IOPS cost if applicable
             if volume_type in ['io1', 'io2']:
                 iops = config.get('iops', 3000)
-                base_price += iops * 0.065  # $0.065 per provisioned IOPS
+                base_price += iops * ebs_pricing['iops']
             
             return base_price
             
@@ -1186,29 +1487,9 @@ class DynamicPricingEngine:
             instance_type = config.get('instance_type', 'db.t3.micro')
             engine = config.get('engine', 'PostgreSQL')
             
-            # RDS instance pricing with enterprise considerations
-            if performance_tier == 'Enterprise':
-                rds_prices = {
-                    'db.t3.micro': 0.017, 'db.t3.small': 0.034, 'db.t3.medium': 0.068,
-                    'db.m5.large': 0.17, 'db.m5.xlarge': 0.34, 'db.m5.2xlarge': 0.68,
-                    'db.r5.large': 0.24, 'db.r5.xlarge': 0.48, 'db.r5.2xlarge': 0.96
-                }
-            else:
-                rds_prices = {
-                    'db.t3.micro': 0.017, 'db.t3.small': 0.034, 'db.t3.medium': 0.068,
-                    'db.m5.large': 0.17, 'db.m5.xlarge': 0.34,
-                    'db.r5.large': 0.24, 'db.r5.xlarge': 0.48
-                }
-            
-            # Engine-specific adjustments
-            engine_multipliers = {
-                'PostgreSQL': 1.0,
-                'MySQL': 1.0,
-                'Aurora MySQL': 1.2,
-                'SQL Server': 1.5
-            }
-            
-            base_price = rds_prices.get(instance_type, 0.1) * 730 * engine_multipliers.get(engine, 1.0)
+            # Get real-time pricing from AWS API
+            hourly_price = AWSPricingAPI.get_rds_pricing(instance_type, engine, AWS_REGION)
+            base_price = hourly_price * 730  # 730 hours per month
             
             # Storage costs
             storage_gb = config.get('storage_gb', 20)
@@ -1237,25 +1518,22 @@ class DynamicPricingEngine:
             storage_gb = config.get('storage_gb', 100)
             storage_class = config.get('storage_class', 'Standard')
             
-            storage_prices = {
-                'Standard': 0.023, 'Intelligent-Tiering': 0.0125,
-                'Standard-IA': 0.0125, 'One Zone-IA': 0.01,
-                'Glacier': 0.004, 'Glacier Deep Archive': 0.00099
-            }
-            
-            return storage_gb * storage_prices.get(storage_class, 0.023)
+            storage_price = AWSPricingAPI.get_s3_pricing(storage_class, AWS_REGION)
+            return storage_gb * storage_price
             
         elif service == "AWS Lambda":
             memory_mb = config.get('memory_mb', 128)
             requests = config.get('requests_per_month', 1000000)
             duration_ms = config.get('avg_duration_ms', 100)
             
-            # Lambda pricing calculation
-            request_cost = requests * 0.0000002  # $0.20 per 1M requests
-            gb_seconds = (requests * duration_ms * memory_mb) / (1000 * 1024)
-            compute_cost = gb_seconds * 0.0000166667  # $0.0000166667 per GB-second
+            lambda_pricing = AWSPricingAPI.get_lambda_pricing(AWS_REGION)
             
-            return request_cost + compute_cost
+            # Lambda pricing calculation
+            request_cost = requests * lambda_pricing['request_price']
+            gb_seconds = (requests * duration_ms * memory_mb) / (1000 * 1024)
+            compute_cost = gb_seconds * lambda_pricing['compute_price']
+            
+            return request_cost + compute_cost + (requests * lambda_pricing['additional_charges'])
             
         elif service == "Amazon ECS":
             cluster_type = config.get('cluster_type', 'Fargate')
@@ -1266,9 +1544,9 @@ class DynamicPricingEngine:
                 service_count = config.get('service_count', 3)
                 avg_tasks = config.get('avg_tasks_per_service', 2)
                 
-                # Fargate pricing per vCPU and GB
-                cpu_price_per_hour = 0.04048  # per vCPU per hour
-                memory_price_per_hour = 0.004445  # per GB per hour
+                # Fargate pricing per vCPU and GB (London region)
+                cpu_price_per_hour = 0.04451  # per vCPU per hour (London)
+                memory_price_per_hour = 0.00489  # per GB per hour (London)
                 
                 total_tasks = service_count * avg_tasks
                 monthly_cost = total_tasks * 730 * (cpu_units/1024 * cpu_price_per_hour + memory_gb * memory_price_per_hour)
@@ -1279,11 +1557,8 @@ class DynamicPricingEngine:
                 instance_type = config.get('ecs_instance_type', 't3.medium')
                 
                 # Use EC2 pricing for the instances
-                ec2_prices = {
-                    't3.medium': 0.0416, 'm5.large': 0.096, 'm5.xlarge': 0.192
-                }
-                
-                base_price = ec2_prices.get(instance_type, 0.1) * 730 * instance_count
+                hourly_price = AWSPricingAPI.get_ec2_pricing(instance_type, AWS_REGION)
+                base_price = hourly_price * 730 * instance_count
                 return base_price
             
         elif service == "Amazon EKS":
@@ -1291,16 +1566,12 @@ class DynamicPricingEngine:
             node_type = config.get('node_type', 't3.medium')
             managed_node_groups = config.get('managed_node_groups', 1)
             
-            # EKS cluster cost ($0.10 per hour)
+            # EKS cluster cost ($0.10 per hour) - same across regions
             eks_cluster_cost = 0.10 * 730
             
             # Node instance costs
-            node_prices = {
-                't3.medium': 0.0416, 'm5.large': 0.096, 'm5.xlarge': 0.192,
-                'c5.large': 0.085, 'r5.large': 0.126
-            }
-            
-            node_cost = node_prices.get(node_type, 0.1) * 730 * node_count
+            hourly_price = AWSPricingAPI.get_ec2_pricing(node_type, AWS_REGION)
+            node_cost = hourly_price * 730 * node_count
             
             return eks_cluster_cost + node_cost
             
@@ -1309,16 +1580,13 @@ class DynamicPricingEngine:
             volume_type = config.get('volume_type', 'gp3')
             iops = config.get('iops', 3000) if volume_type in ['io1', 'io2'] else 0
             
-            storage_price_per_gb = {
-                'gp3': 0.08, 'gp2': 0.10, 'io1': 0.125, 'io2': 0.125,
-                'st1': 0.045, 'sc1': 0.015
-            }
+            ebs_pricing = AWSPricingAPI.get_ebs_pricing(volume_type, AWS_REGION)
             
-            base_price = storage_gb * storage_price_per_gb.get(volume_type, 0.08)
+            base_price = storage_gb * ebs_pricing['storage']
             
             # Add IOPS cost for provisioned IOPS volumes
             if volume_type in ['io1', 'io2']:
-                base_price += iops * 0.065  # $0.065 per provisioned IOPS
+                base_price += iops * ebs_pricing['iops']
             
             return base_price
             
@@ -1326,21 +1594,23 @@ class DynamicPricingEngine:
             storage_gb = config.get('storage_gb', 100)
             storage_class = config.get('storage_class', 'Standard')
             
+            # EFS pricing for London region
             efs_prices = {
-                'Standard': 0.30,  # $0.30 per GB-month
-                'Infrequent Access': 0.025  # $0.025 per GB-month
+                'Standard': 0.33,  # $0.33 per GB-month (London)
+                'Infrequent Access': 0.0275  # $0.0275 per GB-month (London)
             }
             
-            return storage_gb * efs_prices.get(storage_class, 0.30)
+            return storage_gb * efs_prices.get(storage_class, 0.33)
             
         elif service == "Amazon ElastiCache":
             node_type = config.get('node_type', 'cache.t3.micro')
             node_count = config.get('node_count', 1)
             engine = config.get('engine', 'Redis')
             
+            # ElastiCache pricing for London region
             cache_prices = {
-                'cache.t3.micro': 0.020, 'cache.t3.small': 0.038, 'cache.t3.medium': 0.076,
-                'cache.m5.large': 0.171, 'cache.r5.large': 0.242
+                'cache.t3.micro': 0.022, 'cache.t3.small': 0.042, 'cache.t3.medium': 0.084,
+                'cache.m5.large': 0.188, 'cache.r5.large': 0.266
             }
             
             base_price = cache_prices.get(node_type, 0.1) * 730 * node_count
@@ -1355,11 +1625,13 @@ class DynamicPricingEngine:
             data_transfer_tb = config.get('data_transfer_tb', 50)
             requests_million = config.get('requests_million', 10)
             
+            cloudfront_pricing = AWSPricingAPI.get_cloudfront_pricing(AWS_REGION)
+            
             # Data transfer pricing (per GB)
-            data_transfer_cost = data_transfer_tb * 1024 * 0.085  # $0.085 per GB
+            data_transfer_cost = data_transfer_tb * 1024 * cloudfront_pricing['data_transfer']
             
             # Request pricing (per 10,000 requests)
-            request_cost = requests_million * 100 * 0.0075  # $0.0075 per 10,000 requests
+            request_cost = requests_million * 100 * cloudfront_pricing['requests']
             
             return data_transfer_cost + request_cost
             
@@ -1369,13 +1641,13 @@ class DynamicPricingEngine:
             data_processed_tb = config.get('data_processed_tb', 10)
             
             if lb_type == 'Application Load Balancer':
-                # ALB pricing: $0.0225 per ALB-hour + $0.008 per LCU-hour
-                alb_hourly = 0.0225 * 730  # $0.0225 per hour
+                # ALB pricing: $0.025 per ALB-hour + $0.008 per LCU-hour (London)
+                alb_hourly = 0.025 * 730  # $0.025 per hour
                 lcu_cost = lcu_count * 0.008  # $0.008 per LCU-hour
                 return alb_hourly + lcu_cost
             else:
-                # NLB pricing: $0.0225 per NLB-hour + $0.006 per NLCU-hour
-                nlb_hourly = 0.0225 * 730  # $0.0225 per hour
+                # NLB pricing: $0.025 per NLB-hour + $0.006 per NLCU-hour (London)
+                nlb_hourly = 0.025 * 730  # $0.025 per hour
                 nlcu_cost = lcu_count * 0.006  # $0.006 per NLCU-hour
                 return nlb_hourly + nlcu_cost
             
@@ -1386,9 +1658,9 @@ class DynamicPricingEngine:
             vpn_connections = config.get('vpn_connections', 0)
             
             # VPC is free, but associated services have costs
-            nat_cost = nat_gateways * 0.045 * 730  # $0.045 per NAT Gateway-hour
-            endpoint_cost = vpc_endpoints * 0.01 * 730  # $0.01 per endpoint-hour
-            vpn_cost = vpn_connections * 0.05 * 730  # $0.05 per VPN connection-hour
+            nat_cost = nat_gateways * 0.0495 * 730  # $0.0495 per NAT Gateway-hour (London)
+            endpoint_cost = vpc_endpoints * 0.011 * 730  # $0.011 per endpoint-hour (London)
+            vpn_cost = vpn_connections * 0.055 * 730  # $0.055 per VPN connection-hour (London)
             
             return nat_cost + endpoint_cost + vpn_cost
             
@@ -1448,19 +1720,19 @@ class DynamicPricingEngine:
             base_cost = 0
             
             if usage_type in ['Training', 'All']:
-                # ml.m5.xlarge instance: $0.269 per hour
-                base_cost += training_hours * 0.269
+                # ml.m5.xlarge instance: $0.296 per hour (London)
+                base_cost += training_hours * 0.296
             
             if usage_type in ['Inference', 'All']:
-                # ml.m5.large instance: $0.134 per hour
-                base_cost += inference_hours * 0.134
+                # ml.m5.large instance: $0.147 per hour (London)
+                base_cost += inference_hours * 0.147
             
             if usage_type in ['Notebooks', 'All']:
-                # ml.t3.medium instance: $0.0582 per hour
-                base_cost += notebook_hours * 0.0582
+                # ml.t3.medium instance: $0.064 per hour (London)
+                base_cost += notebook_hours * 0.064
             
             # EBS storage for models and data
-            base_cost += storage_gb * 0.23  # $0.23 per GB-month
+            base_cost += storage_gb * 0.253  # $0.253 per GB-month (London)
             
             return base_cost
             
@@ -1470,7 +1742,7 @@ class DynamicPricingEngine:
             custom_models = config.get('custom_models', 0)
             fine_tuning_hours = config.get('fine_tuning_hours', 0)
             
-            # Claude model pricing (example)
+            # Claude model pricing (example) - same across regions
             input_cost = input_tokens_million * 0.80  # $0.80 per million input tokens
             output_cost = output_tokens_million * 4.00  # $4.00 per million output tokens
             custom_model_cost = custom_models * 100  # $100 per custom model per month
@@ -1666,6 +1938,9 @@ def main():
     st.title("🚀 AWS Cloud Package Builder")
     st.markdown("Design, Configure, and Optimize Your Cloud Architecture with Real-time Pricing")
     
+    # Display AWS Region
+    st.sidebar.markdown(f"**🌍 AWS Region:** {AWS_REGION} (London)")
+    
     initialize_session_state()
     
     # TIMELINE CONFIGURATION
@@ -1819,6 +2094,41 @@ def main():
         
         elif diagram_type == "Graphviz":
             DiagramRenderer.render_graphviz_diagram(st.session_state.selected_services, st.session_state.configurations)
+        
+        # EXPORT SECTION
+        st.header("📤 Export Cost Estimates")
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            if st.button("📊 Export to Excel", use_container_width=True):
+                excel_data = ExportManager.export_to_excel(
+                    st.session_state.configurations,
+                    st.session_state.total_cost,
+                    timeline_config
+                )
+                st.download_button(
+                    label="⬇️ Download Excel File",
+                    data=excel_data,
+                    file_name=f"aws_cost_estimate_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    use_container_width=True
+                )
+        
+        with col2:
+            if st.button("📄 Export to PDF", use_container_width=True):
+                pdf_data = ExportManager.export_to_pdf(
+                    st.session_state.configurations,
+                    st.session_state.total_cost,
+                    timeline_config
+                )
+                st.download_button(
+                    label="⬇️ Download PDF Report",
+                    data=pdf_data,
+                    file_name=f"aws_cost_estimate_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf",
+                    mime="application/pdf",
+                    use_container_width=True
+                )
         
         # TOTAL COST SUMMARY
         st.header("💰 Total Cost Summary")
