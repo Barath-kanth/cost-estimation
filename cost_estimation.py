@@ -11,6 +11,10 @@ import os
 import tempfile
 from pathlib import Path
 from PIL import Image
+import base64
+import io
+import streamlit.components.v1 as components
+import graphviz
 
 # AWS Pricing API configuration
 AWS_PRICING_API_BASE = "https://pricing.us-east-1.amazonaws.com"
@@ -447,6 +451,296 @@ class ProfessionalArchitectureGenerator:
 """
         
         return html_content
+
+    @staticmethod
+    def generate_mermaid_diagram(selected_services: Dict, configurations: Dict) -> str:
+        """Generate Mermaid.js diagram code"""
+        all_services = []
+        for services in selected_services.values():
+            all_services.extend(services)
+        
+        # Add external nodes
+        all_services_with_external = ["User", "External"] + all_services
+        
+        # Generate connections
+        connections = ProfessionalArchitectureGenerator.generate_connections(all_services_with_external)
+        
+        mermaid_code = "graph TB\n"
+        
+        # Define node styles
+        mermaid_code += "    classDef external fill:#e1f5fe,stroke:#01579b,stroke-width:2px\n"
+        mermaid_code += "    classDef frontend fill:#f3e5f5,stroke:#4a148c,stroke-width:2px\n"
+        mermaid_code += "    classDef application fill:#e8f5e8,stroke:#1b5e20,stroke-width:2px\n"
+        mermaid_code += "    classDef data fill:#fff3e0,stroke:#e65100,stroke-width:2px\n"
+        mermaid_code += "    classDef security fill:#ffebee,stroke:#c62828,stroke-width:2px\n"
+        mermaid_code += "    classDef integration fill:#fce4ec,stroke:#ad1457,stroke-width:2px\n"
+        
+        # Add nodes
+        node_ids = {}
+        for service in all_services_with_external:
+            node_id = service.replace(" ", "").replace("Amazon", "").replace("AWS", "")
+            node_ids[service] = node_id
+            
+            config = configurations.get(service, {}).get('config', {})
+            config_text = ""
+            
+            if service == "Amazon EC2" and config:
+                instance_type = config.get('instance_type', 't3.micro')
+                instance_count = config.get('instance_count', 1)
+                config_text = f"\\n({instance_count}x {instance_type})"
+            elif service == "Amazon RDS" and config:
+                engine = config.get('engine', 'PostgreSQL')
+                config_text = f"\\n({engine})"
+            elif service == "Amazon S3" and config:
+                storage_gb = config.get('storage_gb', 100)
+                config_text = f"\\n({storage_gb}GB)"
+            
+            display_name = service.replace("Amazon ", "").replace("AWS ", "")
+            mermaid_code += f'    {node_id}["{display_name}{config_text}"]\n'
+        
+        # Add connections
+        for conn in connections:
+            from_id = node_ids.get(conn['from'], conn['from'].replace(" ", ""))
+            to_id = node_ids.get(conn['to'], conn['to'].replace(" ", ""))
+            mermaid_code += f'    {from_id} -->|{conn["label"]}| {to_id}\n'
+        
+        # Apply styling
+        external_services = ["User", "External"]
+        frontend_services = ["Amazon CloudFront", "Elastic Load Balancing", "Amazon API Gateway"]
+        application_services = ["Amazon EC2", "AWS Lambda", "Amazon ECS", "Amazon EKS"]
+        data_services = ["Amazon S3", "Amazon EBS", "Amazon EFS", "Amazon RDS", "Amazon DynamoDB", "Amazon ElastiCache"]
+        security_services = ["AWS WAF", "Amazon GuardDuty", "AWS Shield"]
+        integration_services = ["AWS Step Functions", "Amazon EventBridge", "Amazon SNS", "Amazon SQS"]
+        
+        for service in all_services_with_external:
+            node_id = node_ids[service]
+            if service in external_services:
+                mermaid_code += f'    class {node_id} external\n'
+            elif service in frontend_services:
+                mermaid_code += f'    class {node_id} frontend\n'
+            elif service in application_services:
+                mermaid_code += f'    class {node_id} application\n'
+            elif service in data_services:
+                mermaid_code += f'    class {node_id} data\n'
+            elif service in security_services:
+                mermaid_code += f'    class {node_id} security\n'
+            elif service in integration_services:
+                mermaid_code += f'    class {node_id} integration\n'
+        
+        return mermaid_code
+
+    @staticmethod
+    def generate_graphviz_diagram(selected_services: Dict, configurations: Dict):
+        """Generate Graphviz diagram"""
+        dot = graphviz.Digraph(comment='AWS Architecture')
+        dot.attr(rankdir='TB', size='12,12')
+        
+        # Define styles
+        dot.attr('node', shape='rectangle', style='filled', fontname='Arial')
+        dot.attr('edge', color='gray50', fontname='Arial', fontsize='10')
+        
+        # Add clusters for organization
+        with dot.subgraph(name='cluster_external') as c:
+            c.attr(label='External', style='filled', fillcolor='lightblue', color='black')
+            c.node('User', 'User', fillcolor='#e1f5fe')
+            c.node('External', 'External Systems', fillcolor='#e1f5fe')
+        
+        # Add services by category
+        for category, services in selected_services.items():
+            if services:
+                with dot.subgraph(name=f'cluster_{category.lower()}') as c:
+                    c.attr(label=category, style='filled', fillcolor='lightgray', color='black')
+                    
+                    for service in services:
+                        config = configurations.get(service, {}).get('config', {})
+                        label = f"{service}\\n{ProfessionalArchitectureGenerator._get_config_summary(service, config)}"
+                        
+                        # Color coding based on service type
+                        if "EC2" in service or "Lambda" in service or "ECS" in service or "EKS" in service:
+                            fillcolor = '#e8f5e8'  # Green for compute
+                        elif "S3" in service or "EBS" in service or "EFS" in service:
+                            fillcolor = '#fff3e0'  # Orange for storage
+                        elif "RDS" in service or "DynamoDB" in service:
+                            fillcolor = '#e3f2fd'  # Blue for database
+                        else:
+                            fillcolor = '#f3e5f5'  # Purple for others
+                        
+                        c.node(service, label, fillcolor=fillcolor)
+        
+        # Add connections
+        all_services = []
+        for services in selected_services.values():
+            all_services.extend(services)
+        all_services_with_external = ["User", "External"] + all_services
+        
+        connections = ProfessionalArchitectureGenerator.generate_connections(all_services_with_external)
+        for conn in connections:
+            dot.edge(conn['from'], conn['to'], label=conn['label'])
+        
+        return dot
+
+    @staticmethod
+    def _get_config_summary(service: str, config: Dict) -> str:
+        """Get configuration summary for node label"""
+        if service == "Amazon EC2":
+            return f"{config.get('instance_count', 1)}x {config.get('instance_type', 't3.micro')}"
+        elif service == "Amazon RDS":
+            return f"{config.get('engine', 'PostgreSQL')}"
+        elif service == "Amazon S3":
+            return f"{config.get('storage_gb', 100)}GB"
+        elif service == "AWS Lambda":
+            return f"{config.get('memory_mb', 128)}MB"
+        return ""
+
+class DiagramRenderer:
+    """Render different types of architecture diagrams"""
+    
+    @staticmethod
+    def render_mermaid_diagram(selected_services: Dict, configurations: Dict):
+        """Render Mermaid.js diagram"""
+        st.subheader("🔗 Mermaid.js Diagram")
+        
+        mermaid_code = ProfessionalArchitectureGenerator.generate_mermaid_diagram(
+            selected_services, configurations
+        )
+        
+        # Display Mermaid diagram
+        components.html(
+            f"""
+            <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+            <div class="mermaid">
+                {mermaid_code}
+            </div>
+            <script>
+                mermaid.initialize({{ 
+                    startOnLoad: true, 
+                    theme: 'default',
+                    flowchart: {{ 
+                        useMaxWidth: true,
+                        htmlLabels: true
+                    }}
+                }});
+            </script>
+            <style>
+                .mermaid {{ 
+                    background: white;
+                    padding: 20px;
+                    border-radius: 10px;
+                    border: 1px solid #e1e4e8;
+                }}
+            </style>
+            """,
+            height=600,
+            scrolling=True
+        )
+        
+        with st.expander("View Mermaid Code"):
+            st.code(mermaid_code, language="mermaid")
+
+    @staticmethod
+    def render_graphviz_diagram(selected_services: Dict, configurations: Dict):
+        """Render Graphviz diagram"""
+        st.subheader("📊 Graphviz Diagram")
+        
+        dot = ProfessionalArchitectureGenerator.generate_graphviz_diagram(
+            selected_services, configurations
+        )
+        
+        # Display Graphviz diagram
+        st.graphviz_chart(dot.source)
+
+    @staticmethod
+    def render_plantuml_diagram(selected_services: Dict, configurations: Dict):
+        """Render PlantUML diagram (converted to image)"""
+        st.subheader("🌿 PlantUML Diagram")
+        
+        plantuml_code = DiagramRenderer._generate_plantuml_code(selected_services, configurations)
+        
+        if st.button("Generate PlantUML Diagram"):
+            with st.spinner("Generating PlantUML diagram..."):
+                diagram_image = DiagramRenderer._plantuml_to_image(plantuml_code)
+                if diagram_image:
+                    st.image(diagram_image, caption="AWS Architecture Diagram (PlantUML)", use_column_width=True)
+        
+        with st.expander("View PlantUML Code"):
+            st.code(plantuml_code, language="plantuml")
+
+    @staticmethod
+    def _generate_plantuml_code(selected_services: Dict, configurations: Dict) -> str:
+        """Generate PlantUML code for the architecture"""
+        plantuml_code = """@startuml
+!define AWSPREFIX https://raw.githubusercontent.com/awslabs/aws-icons-for-plantuml/v14.0/dist
+!includeurl AWSPREFIX/AWSCommon.puml
+
+skinparam nodesep 10
+skinparam ranksep 10
+skinparam defaultTextAlignment center
+skinparam roundcorner 10
+
+rectangle "User" as user
+rectangle "External Systems" as external
+
+cloud AWS {
+"""
+        
+        # Add services
+        for category, services in selected_services.items():
+            if services:
+                plantuml_code += f"  folder {category} {{\n"
+                for service in services:
+                    config = configurations.get(service, {}).get('config', {})
+                    config_text = ProfessionalArchitectureGenerator._get_config_summary(service, config)
+                    
+                    if service == "Amazon EC2":
+                        plantuml_code += f'    EC2("{service}\\n{config_text}") as {service.replace(" ", "")}\n'
+                    elif service == "Amazon S3":
+                        plantuml_code += f'    S3("{service}\\n{config_text}") as {service.replace(" ", "")}\n'
+                    elif service == "Amazon RDS":
+                        plantuml_code += f'    RDS("{service}\\n{config_text}") as {service.replace(" ", "")}\n'
+                    elif service == "AWS Lambda":
+                        plantuml_code += f'    Lambda("{service}\\n{config_text}") as {service.replace(" ", "")}\n'
+                    elif service == "Amazon EKS":
+                        plantuml_code += f'    EKS("{service}\\n{config_text}") as {service.replace(" ", "")}\n'
+                    else:
+                        plantuml_code += f'    rectangle "{service}\\n{config_text}" as {service.replace(" ", "")}\n'
+                plantuml_code += "  }\n"
+        
+        plantuml_code += "}\n\n"
+        
+        # Add connections
+        all_services = []
+        for services in selected_services.values():
+            all_services.extend(services)
+        all_services_with_external = ["User", "External"] + all_services
+        
+        connections = ProfessionalArchitectureGenerator.generate_connections(all_services_with_external)
+        for conn in connections:
+            from_node = conn['from'].replace(" ", "")
+            to_node = conn['to'].replace(" ", "")
+            plantuml_code += f'{from_node} --> {to_node} : {conn["label"]}\n'
+        
+        plantuml_code += "@enduml"
+        return plantuml_code
+
+    @staticmethod
+    def _plantuml_to_image(plantuml_code: str) -> Image:
+        """Convert PlantUML code to image using PlantUML server"""
+        try:
+            # Encode the PlantUML code
+            encoded = base64.b64encode(plantuml_code.encode('utf-8')).decode('utf-8')
+            
+            # PlantUML server URL
+            plantuml_url = f"http://www.plantuml.com/plantuml/png/{encoded}"
+            
+            response = requests.get(plantuml_url)
+            if response.status_code == 200:
+                return Image.open(io.BytesIO(response.content))
+            else:
+                st.error("Failed to generate PlantUML diagram")
+                return None
+        except Exception as e:
+            st.error(f"Error generating PlantUML diagram: {e}")
+            return None
 
 class YearlyTimelineCalculator:
     @staticmethod
@@ -1067,9 +1361,6 @@ class DynamicPricingEngine:
         # Default case for services without specific pricing
         return 0.0
 
-# Rest of your configuration functions remain the same...
-# [Keep all your existing render_service_configurator, main function, etc.]
-
 def render_service_configurator(service: str, key_prefix: str) -> Dict:
     """Render configuration options for selected service"""
     config = {}
@@ -1360,40 +1651,40 @@ def main():
                     # Add to total cost
                     st.session_state.total_cost += pricing_result['total_timeline_cost']
         
-        # GENERATE PROFESSIONAL ARCHITECTURE DIAGRAM
-        st.header("🏗️ Professional Architecture Diagram")
+        # MULTIPLE DIAGRAM VIEWS
+        st.header("🎨 Architecture Diagrams")
         
-        # Generate professional diagram
-        html_diagram = ProfessionalArchitectureGenerator.generate_professional_diagram_html(
-            st.session_state.selected_services,
-            st.session_state.configurations,
-            requirements
-        )
+        diagram_tabs = st.tabs(["Professional HTML", "Mermaid.js", "Graphviz", "PlantUML"])
         
-        # Display the professional diagram
-        st.subheader("📐 Your AWS Architecture")
-        
-        col1, col2 = st.columns([3, 1])
-        
-        with col1:
-            try:
-                import streamlit.components.v1 as components
-                components.html(html_diagram, height=1000, scrolling=True)
-                
-            except Exception as e:
-                st.error(f"Error displaying diagram: {str(e)}")
-                st.code(html_diagram, language="html")
-        
-        with col2:
-            st.subheader("Diagram Controls")
+        with diagram_tabs[0]:
+            # Generate professional diagram
+            html_diagram = ProfessionalArchitectureGenerator.generate_professional_diagram_html(
+                st.session_state.selected_services,
+                st.session_state.configurations,
+                requirements
+            )
             
-            # Diagram information
-            with st.expander("📊 Architecture Info", expanded=True):
-                total_services = sum(len(services) for services in st.session_state.selected_services.values())
-                st.metric("Total Services", total_services)
-                
-                categories_used = [cat for cat, services in st.session_state.selected_services.items() if services]
-                st.write("**Categories:**", ", ".join(categories_used))
+            # Display the professional diagram
+            st.subheader("📐 Professional Architecture Diagram")
+            components.html(html_diagram, height=1000, scrolling=True)
+        
+        with diagram_tabs[1]:
+            DiagramRenderer.render_mermaid_diagram(
+                st.session_state.selected_services,
+                st.session_state.configurations
+            )
+        
+        with diagram_tabs[2]:
+            DiagramRenderer.render_graphviz_diagram(
+                st.session_state.selected_services,
+                st.session_state.configurations
+            )
+        
+        with diagram_tabs[3]:
+            DiagramRenderer.render_plantuml_diagram(
+                st.session_state.selected_services,
+                st.session_state.configurations
+            )
         
         # TOTAL COST SUMMARY
         st.header("💰 Total Cost Summary")
@@ -1435,6 +1726,14 @@ def main():
             
             # Use Streamlit native bar chart
             st.bar_chart(cost_df.set_index('Service')['Total Cost'])
+            
+            # Pie chart for cost distribution
+            st.subheader("🥧 Cost Distribution")
+            st.plotly_chart(
+                px.pie(cost_df, values='Total Cost', names='Service', 
+                      title='Cost Distribution by Service'),
+                use_container_width=True
+            )
 
 if __name__ == "__main__":
     main()
