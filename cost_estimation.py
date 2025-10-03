@@ -82,173 +82,220 @@ AWS_SERVICES = {
 }
 
 class ProfessionalArchitectureGenerator:
-    """Generate professional AWS architecture diagrams with real AWS icons"""
+    """Generate professional AWS architecture diagrams with embedded AWS icons"""
     
     @staticmethod
-    def get_service_icon_url(service_name: str) -> str:
-        """Get real AWS icon URL from icon.icepanel.io"""
-        # Comprehensive icon mapping with multiple possible names
-        icon_mapping = {
-            # External/User
-            "User": "https://icon.icepanel.io/AWS/svg/General-Icons/Users.svg",
-            "External": "https://icon.icepanel.io/AWS/svg/General-Icons/Internet.svg",
+    def get_service_icon_svg(service_name: str) -> str:
+        """Get embedded SVG icon for AWS services"""
+        
+        # Embedded SVG icons as base64 or inline SVG
+        icons = {
+            "User": """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="#232f3e">
+                <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
+            </svg>""",
             
-            # Compute
-            "Amazon EC2": "https://icon.icepanel.io/AWS/svg/Compute/EC2.svg",
-            "EC2": "https://icon.icepanel.io/AWS/svg/Compute/EC2.svg",
-            "AWS Lambda": "https://icon.icepanel.io/AWS/svg/Compute/Lambda.svg",
-            "Lambda": "https://icon.icepanel.io/AWS/svg/Compute/Lambda.svg",
-            "Amazon ECS": "https://icon.icepanel.io/AWS/svg/Compute/Elastic-Container-Service.svg",
-            "ECS": "https://icon.icepanel.io/AWS/svg/Compute/Elastic-Container-Service.svg",
-            "Amazon EKS": "https://icon.icepanel.io/AWS/svg/Compute/Elastic-Kubernetes-Service.svg",
-            "EKS": "https://icon.icepanel.io/AWS/svg/Compute/Elastic-Kubernetes-Service.svg",
+            "External": """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="#232f3e">
+                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.94-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/>
+            </svg>""",
             
-            # Storage
-            "Amazon S3": "https://icon.icepanel.io/AWS/svg/Storage/Simple-Storage-Service.svg",
-            "S3": "https://icon.icepanel.io/AWS/svg/Storage/Simple-Storage-Service.svg",
-            "Amazon EBS": "https://icon.icepanel.io/AWS/svg/Storage/Elastic-Block-Store.svg",
-            "EBS": "https://icon.icepanel.io/AWS/svg/Storage/Elastic-Block-Store.svg",
-            "Amazon EFS": "https://icon.icepanel.io/AWS/svg/Storage/Elastic-File-System.svg",
-            "EFS": "https://icon.icepanel.io/AWS/svg/Storage/Elastic-File-System.svg",
+            "Amazon EC2": """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" fill="#FF9900">
+                <rect x="10" y="20" width="60" height="40" rx="3" fill="#FF9900"/>
+                <rect x="15" y="25" width="50" height="30" rx="2" fill="white"/>
+                <text x="40" y="45" text-anchor="middle" font-family="Arial" font-size="14" font-weight="bold" fill="#FF9900">EC2</text>
+            </svg>""",
             
-            # Database
-            "Amazon RDS": "https://icon.icepanel.io/AWS/svg/Database/RDS.svg",
-            "RDS": "https://icon.icepanel.io/AWS/svg/Database/RDS.svg",
-            "Amazon DynamoDB": "https://icon.icepanel.io/AWS/svg/Database/DynamoDB.svg",
-            "DynamoDB": "https://icon.icepanel.io/AWS/svg/Database/DynamoDB.svg",
-            "Amazon ElastiCache": "https://icon.icepanel.io/AWS/svg/Database/ElastiCache.svg",
-            "ElastiCache": "https://icon.icepanel.io/AWS/svg/Database/ElastiCache.svg",
-            "Amazon OpenSearch": "https://icon.icepanel.io/AWS/svg/Analytics/OpenSearch-Service.svg",
-            "OpenSearch": "https://icon.icepanel.io/AWS/svg/Analytics/OpenSearch-Service.svg",
+            "AWS Lambda": """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" fill="#FF9900">
+                <path d="M40 10 L60 30 L60 50 L40 70 L20 50 L20 30 Z" fill="#FF9900"/>
+                <text x="40" y="45" text-anchor="middle" font-family="Arial" font-size="12" font-weight="bold" fill="white">λ</text>
+            </svg>""",
             
-            # AI/ML
-            "Amazon Bedrock": "https://icon.icepanel.io/AWS/svg/Machine-Learning/Bedrock.svg",
-            "Bedrock": "https://icon.icepanel.io/AWS/svg/Machine-Learning/Bedrock.svg",
-            "Amazon SageMaker": "https://icon.icepanel.io/AWS/svg/Machine-Learning/SageMaker.svg",
-            "SageMaker": "https://icon.icepanel.io/AWS/svg/Machine-Learning/SageMaker.svg",
+            "Amazon ECS": """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" fill="#FF9900">
+                <rect x="10" y="15" width="25" height="25" rx="3" fill="#FF9900"/>
+                <rect x="45" y="15" width="25" height="25" rx="3" fill="#FF9900"/>
+                <rect x="10" y="45" width="25" height="25" rx="3" fill="#FF9900"/>
+                <rect x="45" y="45" width="25" height="25" rx="3" fill="#FF9900"/>
+            </svg>""",
             
-            # Analytics
-            "Amazon Kinesis": "https://icon.icepanel.io/AWS/svg/Analytics/Kinesis.svg",
-            "Kinesis": "https://icon.icepanel.io/AWS/svg/Analytics/Kinesis.svg",
-            "AWS Glue": "https://icon.icepanel.io/AWS/svg/Analytics/Glue.svg",
-            "Glue": "https://icon.icepanel.io/AWS/svg/Analytics/Glue.svg",
-            "Amazon Redshift": "https://icon.icepanel.io/AWS/svg/Analytics/Redshift.svg",
-            "Redshift": "https://icon.icepanel.io/AWS/svg/Analytics/Redshift.svg",
+            "Amazon EKS": """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" fill="#FF9900">
+                <polygon points="40,10 70,30 70,50 40,70 10,50 10,30" fill="#FF9900"/>
+                <circle cx="40" cy="40" r="15" fill="white"/>
+                <text x="40" y="45" text-anchor="middle" font-family="Arial" font-size="12" font-weight="bold" fill="#FF9900">K8s</text>
+            </svg>""",
             
-            # Networking
-            "Amazon VPC": "https://icon.icepanel.io/AWS/svg/Networking-Content-Delivery/Virtual-Private-Cloud.svg",
-            "VPC": "https://icon.icepanel.io/AWS/svg/Networking-Content-Delivery/Virtual-Private-Cloud.svg",
-            "Amazon CloudFront": "https://icon.icepanel.io/AWS/svg/Networking-Content-Delivery/CloudFront.svg",
-            "CloudFront": "https://icon.icepanel.io/AWS/svg/Networking-Content-Delivery/CloudFront.svg",
-            "Elastic Load Balancing": "https://icon.icepanel.io/AWS/svg/Networking-Content-Delivery/Elastic-Load-Balancing.svg",
-            "Load Balancing": "https://icon.icepanel.io/AWS/svg/Networking-Content-Delivery/Elastic-Load-Balancing.svg",
-            "Amazon API Gateway": "https://icon.icepanel.io/AWS/svg/Networking-Content-Delivery/API-Gateway.svg",
-            "API Gateway": "https://icon.icepanel.io/AWS/svg/Networking-Content-Delivery/API-Gateway.svg",
+            "Amazon S3": """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" fill="#569A31">
+                <ellipse cx="40" cy="20" rx="25" ry="10" fill="#569A31"/>
+                <rect x="15" y="20" width="50" height="40" fill="#569A31"/>
+                <ellipse cx="40" cy="60" rx="25" ry="10" fill="#569A31"/>
+                <ellipse cx="40" cy="20" rx="25" ry="10" fill="#7CB342"/>
+            </svg>""",
             
-            # Security
-            "AWS WAF": "https://icon.icepanel.io/AWS/svg/Security-Identity-Compliance/WAF.svg",
-            "WAF": "https://icon.icepanel.io/AWS/svg/Security-Identity-Compliance/WAF.svg",
-            "Amazon GuardDuty": "https://icon.icepanel.io/AWS/svg/Security-Identity-Compliance/GuardDuty.svg",
-            "GuardDuty": "https://icon.icepanel.io/AWS/svg/Security-Identity-Compliance/GuardDuty.svg",
-            "AWS Shield": "https://icon.icepanel.io/AWS/svg/Security-Identity-Compliance/Shield.svg",
-            "Shield": "https://icon.icepanel.io/AWS/svg/Security-Identity-Compliance/Shield.svg",
+            "Amazon RDS": """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" fill="#1B5E9E">
+                <ellipse cx="40" cy="25" rx="20" ry="8" fill="#1B5E9E"/>
+                <rect x="20" y="25" width="40" height="30" fill="#1B5E9E"/>
+                <ellipse cx="40" cy="55" rx="20" ry="8" fill="#1B5E9E"/>
+                <path d="M20 30 Q20 38 40 38 T60 30" fill="#2196F3"/>
+                <path d="M20 40 Q20 48 40 48 T60 40" fill="#2196F3"/>
+            </svg>""",
             
-            # Application Integration
-            "AWS Step Functions": "https://icon.icepanel.io/AWS/svg/Application-Integration/Step-Functions.svg",
-            "Step Functions": "https://icon.icepanel.io/AWS/svg/Application-Integration/Step-Functions.svg",
-            "Amazon EventBridge": "https://icon.icepanel.io/AWS/svg/Application-Integration/EventBridge.svg",
-            "EventBridge": "https://icon.icepanel.io/AWS/svg/Application-Integration/EventBridge.svg",
-            "Amazon SNS": "https://icon.icepanel.io/AWS/svg/Application-Integration/Simple-Notification-Service.svg",
-            "SNS": "https://icon.icepanel.io/AWS/svg/Application-Integration/Simple-Notification-Service.svg",
-            "Amazon SQS": "https://icon.icepanel.io/AWS/svg/Application-Integration/Simple-Queue-Service.svg",
-            "SQS": "https://icon.icepanel.io/AWS/svg/Application-Integration/Simple-Queue-Service.svg",
+            "Amazon DynamoDB": """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" fill="#1B5E9E">
+                <rect x="10" y="20" width="60" height="40" rx="5" fill="#1B5E9E"/>
+                <circle cx="25" cy="40" r="8" fill="white"/>
+                <circle cx="40" cy="40" r="8" fill="white"/>
+                <circle cx="55" cy="40" r="8" fill="white"/>
+            </svg>""",
+            
+            "Amazon API Gateway": """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" fill="#FF9900">
+                <rect x="35" y="10" width="10" height="60" fill="#FF9900"/>
+                <rect x="20" y="35" width="40" height="10" fill="#FF9900"/>
+                <circle cx="20" cy="40" r="8" fill="#FF9900"/>
+                <circle cx="60" cy="40" r="8" fill="#FF9900"/>
+                <circle cx="40" cy="15" r="8" fill="#FF9900"/>
+                <circle cx="40" cy="65" r="8" fill="#FF9900"/>
+            </svg>""",
+            
+            "Amazon CloudFront": """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" fill="#8B4FFF">
+                <polygon points="40,10 70,30 60,60 20,60 10,30" fill="#8B4FFF"/>
+                <circle cx="40" cy="40" r="15" fill="white"/>
+                <circle cx="40" cy="40" r="8" fill="#8B4FFF"/>
+            </svg>""",
+            
+            "Elastic Load Balancing": """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" fill="#FF9900">
+                <rect x="35" y="10" width="10" height="60" fill="#FF9900"/>
+                <rect x="15" y="25" width="15" height="10" fill="#FF9900"/>
+                <rect x="50" y="25" width="15" height="10" fill="#FF9900"/>
+                <rect x="15" y="45" width="15" height="10" fill="#FF9900"/>
+                <rect x="50" y="45" width="15" height="10" fill="#FF9900"/>
+            </svg>""",
+            
+            "Amazon VPC": """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" fill="#FF9900">
+                <rect x="10" y="10" width="60" height="60" rx="5" fill="none" stroke="#FF9900" stroke-width="3"/>
+                <rect x="20" y="20" width="20" height="20" fill="#FF9900" opacity="0.5"/>
+                <rect x="50" y="20" width="20" height="20" fill="#FF9900" opacity="0.5"/>
+                <rect x="20" y="50" width="20" height="20" fill="#FF9900" opacity="0.5"/>
+            </svg>""",
+            
+            "Amazon EBS": """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" fill="#FF9900">
+                <rect x="20" y="15" width="40" height="50" rx="3" fill="#FF9900"/>
+                <rect x="25" y="20" width="30" height="8" fill="white"/>
+                <rect x="25" y="32" width="30" height="8" fill="white"/>
+                <rect x="25" y="44" width="30" height="8" fill="white"/>
+                <rect x="25" y="56" width="30" height="8" fill="white"/>
+            </svg>""",
+            
+            "Amazon EFS": """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" fill="#FF9900">
+                <path d="M20 20 L60 20 L60 50 L50 60 L20 60 Z" fill="#FF9900"/>
+                <path d="M50 50 L50 60 L60 50 Z" fill="#CC7A00"/>
+                <rect x="25" y="30" width="25" height="3" fill="white"/>
+                <rect x="25" y="38" width="25" height="3" fill="white"/>
+                <rect x="25" y="46" width="20" height="3" fill="white"/>
+            </svg>""",
+            
+            "Amazon Kinesis": """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" fill="#8B4FFF">
+                <path d="M10 40 Q30 20 40 40 T70 40" stroke="#8B4FFF" stroke-width="4" fill="none"/>
+                <circle cx="10" cy="40" r="5" fill="#8B4FFF"/>
+                <circle cx="40" cy="40" r="5" fill="#8B4FFF"/>
+                <circle cx="70" cy="40" r="5" fill="#8B4FFF"/>
+            </svg>""",
+            
+            "AWS Glue": """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" fill="#8B4FFF">
+                <rect x="10" y="30" width="20" height="20" rx="3" fill="#8B4FFF"/>
+                <rect x="50" y="30" width="20" height="20" rx="3" fill="#8B4FFF"/>
+                <path d="M30 40 L50 40" stroke="#8B4FFF" stroke-width="3"/>
+                <circle cx="40" cy="40" r="8" fill="#8B4FFF"/>
+            </svg>""",
+            
+            "Amazon Redshift": """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" fill="#8B4FFF">
+                <rect x="15" y="15" width="50" height="50" rx="5" fill="#8B4FFF"/>
+                <rect x="25" y="25" width="10" height="30" fill="white"/>
+                <rect x="40" y="35" width="10" height="20" fill="white"/>
+                <rect x="55" y="30" width="10" height="25" fill="white"/>
+            </svg>""",
+            
+            "Amazon Bedrock": """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" fill="#01A88D">
+                <rect x="10" y="45" width="60" height="20" fill="#01A88D"/>
+                <polygon points="25,45 25,25 40,15 55,25 55,45" fill="#01A88D"/>
+                <circle cx="40" cy="30" r="8" fill="white"/>
+            </svg>""",
+            
+            "Amazon SageMaker": """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" fill="#01A88D">
+                <circle cx="40" cy="40" r="25" fill="#01A88D"/>
+                <path d="M30 40 L50 40 M40 30 L40 50" stroke="white" stroke-width="3"/>
+                <circle cx="40" cy="40" r="5" fill="white"/>
+            </svg>""",
+            
+            "AWS Step Functions": """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" fill="#C925D1">
+                <rect x="10" y="15" width="20" height="15" rx="3" fill="#C925D1"/>
+                <rect x="10" y="35" width="20" height="15" rx="3" fill="#C925D1"/>
+                <rect x="10" y="55" width="20" height="15" rx="3" fill="#C925D1"/>
+                <path d="M30 22 L40 22 L40 42 L30 42 M40 42 L50 42 M30 62 L40 62 L40 42" stroke="#C925D1" stroke-width="2" fill="none"/>
+                <rect x="50" y="35" width="20" height="15" rx="3" fill="#C925D1"/>
+            </svg>""",
+            
+            "Amazon EventBridge": """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" fill="#C925D1">
+                <circle cx="40" cy="40" r="20" fill="none" stroke="#C925D1" stroke-width="3"/>
+                <circle cx="40" cy="20" r="8" fill="#C925D1"/>
+                <circle cx="60" cy="40" r="8" fill="#C925D1"/>
+                <circle cx="40" cy="60" r="8" fill="#C925D1"/>
+                <circle cx="20" cy="40" r="8" fill="#C925D1"/>
+            </svg>""",
+            
+            "Amazon SNS": """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" fill="#C925D1">
+                <circle cx="30" cy="40" r="8" fill="#C925D1"/>
+                <path d="M30 40 L50 25 M30 40 L50 40 M30 40 L50 55" stroke="#C925D1" stroke-width="2"/>
+                <circle cx="50" cy="25" r="6" fill="#C925D1"/>
+                <circle cx="50" cy="40" r="6" fill="#C925D1"/>
+                <circle cx="50" cy="55" r="6" fill="#C925D1"/>
+            </svg>""",
+            
+            "Amazon SQS": """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" fill="#C925D1">
+                <rect x="15" y="30" width="50" height="20" rx="3" fill="#C925D1"/>
+                <rect x="20" y="35" width="8" height="10" fill="white"/>
+                <rect x="32" y="35" width="8" height="10" fill="white"/>
+                <rect x="44" y="35" width="8" height="10" fill="white"/>
+                <path d="M56 40 L60 40" stroke="white" stroke-width="2"/>
+            </svg>""",
+            
+            "Amazon ElastiCache": """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" fill="#1B5E9E">
+                <rect x="10" y="25" width="25" height="30" rx="3" fill="#1B5E9E"/>
+                <rect x="45" y="25" width="25" height="30" rx="3" fill="#1B5E9E"/>
+                <path d="M35 40 L45 40" stroke="#1B5E9E" stroke-width="3"/>
+            </svg>""",
+            
+            "Amazon OpenSearch": """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" fill="#8B4FFF">
+                <circle cx="35" cy="35" r="18" fill="none" stroke="#8B4FFF" stroke-width="3"/>
+                <path d="M47 47 L60 60" stroke="#8B4FFF" stroke-width="3"/>
+                <circle cx="35" cy="35" r="8" fill="#8B4FFF"/>
+            </svg>""",
+            
+            "AWS WAF": """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" fill="#DD344C">
+                <polygon points="40,10 70,30 70,50 40,70 10,50 10,30" fill="#DD344C"/>
+                <polygon points="40,20 60,33 60,47 40,60 20,47 20,33" fill="white"/>
+                <polygon points="40,30 50,36 50,44 40,50 30,44 30,36" fill="#DD344C"/>
+            </svg>""",
+            
+            "Amazon GuardDuty": """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" fill="#DD344C">
+                <polygon points="40,10 65,25 65,55 40,70 15,55 15,25" fill="#DD344C"/>
+                <circle cx="40" cy="40" r="15" fill="white"/>
+                <circle cx="40" cy="40" r="8" fill="#DD344C"/>
+            </svg>""",
+            
+            "AWS Shield": """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" fill="#DD344C">
+                <path d="M40 10 L60 20 L60 45 Q60 60 40 70 Q20 60 20 45 L20 20 Z" fill="#DD344C"/>
+                <path d="M40 20 L50 25 L50 40 Q50 50 40 55 Q30 50 30 40 L30 25 Z" fill="white"/>
+            </svg>"""
         }
         
-        # Try exact match first
-        if service_name in icon_mapping:
-            return icon_mapping[service_name]
+        # Return the SVG for the service or a default icon
+        default_icon = """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" fill="#232f3e">
+            <rect x="10" y="10" width="60" height="60" rx="5" fill="#FF9900"/>
+            <text x="40" y="45" text-anchor="middle" font-family="Arial" font-size="10" font-weight="bold" fill="white">AWS</text>
+        </svg>"""
         
-        # Try to find by removing "Amazon" and "AWS" prefixes
-        simplified_name = service_name.replace("Amazon ", "").replace("AWS ", "").strip()
-        if simplified_name in icon_mapping:
-            return icon_mapping[simplified_name]
-        
-        # Fallback to general icon
-        return "https://icon.icepanel.io/AWS/svg/Architecture-Service-Icons/Arch_AWS-Cloud_48.svg"
-    
-    @staticmethod
-    def generate_connections(selected_services: List[str]) -> List[Dict]:
-        """Generate intelligent connections between services"""
-        connections = []
-        
-        # User to frontend
-        if "Amazon CloudFront" in selected_services:
-            connections.append({"from": "User", "to": "Amazon CloudFront", "label": "HTTPS"})
-        if "Elastic Load Balancing" in selected_services:
-            connections.append({"from": "User", "to": "Elastic Load Balancing", "label": "API Requests"})
-        if "Amazon API Gateway" in selected_services:
-            connections.append({"from": "User", "to": "Amazon API Gateway", "label": "API Calls"})
-        
-        # Frontend to storage
-        if "Amazon CloudFront" in selected_services and "Amazon S3" in selected_services:
-            connections.append({"from": "Amazon CloudFront", "to": "Amazon S3", "label": "Static Content"})
-        
-        # Load balancer to compute
-        if "Elastic Load Balancing" in selected_services:
-            for compute in ["Amazon EC2", "Amazon ECS", "Amazon EKS"]:
-                if compute in selected_services:
-                    connections.append({"from": "Elastic Load Balancing", "to": compute, "label": "Routes Traffic"})
-        
-        # API Gateway to compute
-        if "Amazon API Gateway" in selected_services and "AWS Lambda" in selected_services:
-            connections.append({"from": "Amazon API Gateway", "to": "AWS Lambda", "label": "Invokes"})
-        
-        # Compute to database
-        compute_services = ["Amazon EC2", "AWS Lambda", "Amazon ECS", "Amazon EKS"]
-        db_services = ["Amazon RDS", "Amazon DynamoDB", "Amazon ElastiCache"]
-        
-        for compute in compute_services:
-            if compute in selected_services:
-                for db in db_services:
-                    if db in selected_services:
-                        connections.append({"from": compute, "to": db, "label": "Queries"})
-        
-        # Analytics pipeline
-        if "Amazon Kinesis" in selected_services and "Amazon S3" in selected_services:
-            connections.append({"from": "External", "to": "Amazon Kinesis", "label": "Streams Data"})
-            connections.append({"from": "Amazon Kinesis", "to": "Amazon S3", "label": "Stores"})
-        
-        if "AWS Glue" in selected_services and "Amazon S3" in selected_services:
-            connections.append({"from": "AWS Glue", "to": "Amazon S3", "label": "Processes"})
-        
-        if "Amazon OpenSearch" in selected_services:
-            if "AWS Glue" in selected_services:
-                connections.append({"from": "AWS Glue", "to": "Amazon OpenSearch", "label": "Loads"})
-        
-        # AI/ML connections
-        if "Amazon Bedrock" in selected_services:
-            for compute in compute_services:
-                if compute in selected_services:
-                    connections.append({"from": compute, "to": "Amazon Bedrock", "label": "Invokes AI"})
-        
-        # Step Functions
-        if "AWS Step Functions" in selected_services and "AWS Lambda" in selected_services:
-            connections.append({"from": "AWS Step Functions", "to": "AWS Lambda", "label": "Orchestrates"})
-        
-        if "Amazon EventBridge" in selected_services and "AWS Step Functions" in selected_services:
-            connections.append({"from": "Amazon EventBridge", "to": "AWS Step Functions", "label": "Triggers"})
-        
-        # Security
-        if "AWS WAF" in selected_services:
-            for frontend in ["Amazon CloudFront", "Elastic Load Balancing", "Amazon API Gateway"]:
-                if frontend in selected_services:
-                    connections.append({"from": "AWS WAF", "to": frontend, "label": "Protects"})
-        
-        return connections
+        return icons.get(service_name, icons.get(service_name.replace("Amazon ", "").replace("AWS ", ""), default_icon))
     
     @staticmethod
     def generate_professional_diagram_html(selected_services: Dict, configurations: Dict, requirements: Dict) -> str:
-        """Generate professional HTML diagram with real AWS icons and connections"""
+        """Generate professional HTML diagram with embedded AWS icons"""
         
         # Flatten selected services
         all_services = []
@@ -259,7 +306,7 @@ class ProfessionalArchitectureGenerator:
         all_services_with_external = ["User", "External"] + all_services
         
         # Generate connections
-        connections = ProfessionalArchitectureGenerator.generate_connections(all_services_with_external)
+        connections = ProfessionalArchitectureGenerator.generate_connections(all_services)
         
         # Define layers
         layers = {
@@ -426,7 +473,7 @@ class ProfessionalArchitectureGenerator:
     <div class="architecture-container">
         <div class="header">
             <h2>🏗️ AWS Architecture Diagram</h2>
-            <p>Professional architecture with real AWS service icons and intelligent connections</p>
+            <p>Professional architecture with embedded AWS service icons and intelligent connections</p>
         </div>
 """
         
@@ -444,7 +491,7 @@ class ProfessionalArchitectureGenerator:
                 
                 for service in services_in_layer:
                     config = configurations.get(service, {}).get('config', {})
-                    icon_url = ProfessionalArchitectureGenerator.get_service_icon_url(service)
+                    icon_svg = ProfessionalArchitectureGenerator.get_service_icon_svg(service)
                     
                     # Build configuration text
                     config_text = ""
@@ -491,7 +538,7 @@ class ProfessionalArchitectureGenerator:
                     
                     html_content += f"""
                 <div class="service-card">
-                    <img src="{icon_url}" alt="{service}" class="service-icon" onerror="this.src='https://icon.icepanel.io/AWS/svg/General-Icons/General.svg'">
+                    <div class="service-icon">{icon_svg}</div>
                     <div class="service-name">{display_name}</div>
                     <div class="service-config">{config_text}</div>
                 </div>
@@ -531,6 +578,76 @@ class ProfessionalArchitectureGenerator:
 """
         
         return html_content
+    
+    @staticmethod
+    def generate_connections(selected_services: List[str]) -> List[Dict]:
+        """Generate intelligent connections between services"""
+        connections = []
+        
+        # User to frontend
+        if "Amazon CloudFront" in selected_services:
+            connections.append({"from": "User", "to": "Amazon CloudFront", "label": "HTTPS"})
+        if "Elastic Load Balancing" in selected_services:
+            connections.append({"from": "User", "to": "Elastic Load Balancing", "label": "API Requests"})
+        if "Amazon API Gateway" in selected_services:
+            connections.append({"from": "User", "to": "Amazon API Gateway", "label": "API Calls"})
+        
+        # Frontend to storage
+        if "Amazon CloudFront" in selected_services and "Amazon S3" in selected_services:
+            connections.append({"from": "Amazon CloudFront", "to": "Amazon S3", "label": "Static Content"})
+        
+        # Load balancer to compute
+        if "Elastic Load Balancing" in selected_services:
+            for compute in ["Amazon EC2", "Amazon ECS", "Amazon EKS"]:
+                if compute in selected_services:
+                    connections.append({"from": "Elastic Load Balancing", "to": compute, "label": "Routes Traffic"})
+        
+        # API Gateway to compute
+        if "Amazon API Gateway" in selected_services and "AWS Lambda" in selected_services:
+            connections.append({"from": "Amazon API Gateway", "to": "AWS Lambda", "label": "Invokes"})
+        
+        # Compute to database
+        compute_services = ["Amazon EC2", "AWS Lambda", "Amazon ECS", "Amazon EKS"]
+        db_services = ["Amazon RDS", "Amazon DynamoDB", "Amazon ElastiCache"]
+        
+        for compute in compute_services:
+            if compute in selected_services:
+                for db in db_services:
+                    if db in selected_services:
+                        connections.append({"from": compute, "to": db, "label": "Queries"})
+        
+        # Analytics pipeline
+        if "Amazon Kinesis" in selected_services and "Amazon S3" in selected_services:
+            connections.append({"from": "External", "to": "Amazon Kinesis", "label": "Streams Data"})
+            connections.append({"from": "Amazon Kinesis", "to": "Amazon S3", "label": "Stores"})
+        
+        if "AWS Glue" in selected_services and "Amazon S3" in selected_services:
+            connections.append({"from": "AWS Glue", "to": "Amazon S3", "label": "Processes"})
+        
+        if "Amazon OpenSearch" in selected_services:
+            if "AWS Glue" in selected_services:
+                connections.append({"from": "AWS Glue", "to": "Amazon OpenSearch", "label": "Loads"})
+        
+        # AI/ML connections
+        if "Amazon Bedrock" in selected_services:
+            for compute in compute_services:
+                if compute in selected_services:
+                    connections.append({"from": compute, "to": "Amazon Bedrock", "label": "Invokes AI"})
+        
+        # Step Functions
+        if "AWS Step Functions" in selected_services and "AWS Lambda" in selected_services:
+            connections.append({"from": "AWS Step Functions", "to": "AWS Lambda", "label": "Orchestrates"})
+        
+        if "Amazon EventBridge" in selected_services and "AWS Step Functions" in selected_services:
+            connections.append({"from": "Amazon EventBridge", "to": "AWS Step Functions", "label": "Triggers"})
+        
+        # Security
+        if "AWS WAF" in selected_services:
+            for frontend in ["Amazon CloudFront", "Elastic Load Balancing", "Amazon API Gateway"]:
+                if frontend in selected_services:
+                    connections.append({"from": "AWS WAF", "to": frontend, "label": "Protects"})
+        
+        return connections
 
     @staticmethod
     def generate_mermaid_diagram(selected_services: Dict, configurations: Dict) -> str:
