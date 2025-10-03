@@ -98,8 +98,12 @@ class ProfessionalArchitectureGenerator:
             "EC2": "https://icon.icepanel.io/AWS/svg/Compute/EC2.svg",
             "AWS Lambda": "https://icon.icepanel.io/AWS/svg/Compute/Lambda.svg",
             "Lambda": "https://icon.icepanel.io/AWS/svg/Compute/Lambda.svg",
-            "Amazon ECS": "https://icon.icepanel.io/AWS/svg/Compute/Elastic-Container-Service.svg",
-            "ECS": "https://icon.icepanel.io/AWS/svg/Compute/Elastic-Container-Service.svg",
+            "Amazon ECS": """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" fill="#FF9900">
+                <rect x="10" y="15" width="25" height="25" rx="3" fill="#FF9900"/>
+                <rect x="45" y="15" width="25" height="25" rx="3" fill="#FF9900"/>
+                <rect x="10" y="45" width="25" height="25" rx="3" fill="#FF9900"/>
+                <rect x="45" y="45" width="25" height="25" rx="3" fill="#FF9900"/>
+            </svg>"""
             "Amazon EKS": "https://icon.icepanel.io/AWS/svg/Compute/Elastic-Kubernetes-Service.svg",
             "EKS": "https://icon.icepanel.io/AWS/svg/Compute/Elastic-Kubernetes-Service.svg",
             
