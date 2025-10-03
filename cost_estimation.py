@@ -1201,11 +1201,6 @@ class ProfessionalArchitectureGenerator:
         all_services = []
         for services in selected_services.values():
             all_services.extend(services)
-        all_services_with_external =        
-        
-        all_services = []
-        for services in selected_services.values():
-            all_services.extend(services)
         all_services_with_external = ["User", "External"] + all_services
         
         connections = ProfessionalArchitectureGenerator.generate_connections(all_services_with_external)
