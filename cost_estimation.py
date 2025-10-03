@@ -84,7 +84,7 @@ AWS_SERVICES = {
 class ProfessionalArchitectureGenerator:
     """Generate professional AWS architecture diagrams with real AWS icons"""
     
-    @staticmethod
+@staticmethod
 def get_service_icon_url(service_name: str) -> str:
     """Get real AWS icon URL from icon.icepanel.io"""
     # Comprehensive icon mapping with multiple possible names
