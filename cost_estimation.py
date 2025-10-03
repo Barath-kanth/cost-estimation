@@ -671,7 +671,7 @@ class DiagramRenderer:
         with col1:
             if st.session_state.get('generate_plantuml', False):
                 with st.spinner("Generating PlantUML diagram..."):
-                    plantuml_code = DiagramRenderer._generate_simple_plantuml_code(selected_services, configurations)
+                    plantuml_code = DiagramRenderer._generate_working_plantuml_code(selected_services, configurations)
                     
                     # Try multiple methods to generate the diagram
                     diagram_image = DiagramRenderer._plantuml_simple_method(plantuml_code)
@@ -685,7 +685,7 @@ class DiagramRenderer:
             
             # Always show the code
             with st.expander("📋 View PlantUML Code", expanded=True):
-                plantuml_code = DiagramRenderer._generate_simple_plantuml_code(selected_services, configurations)
+                plantuml_code = DiagramRenderer._generate_working_plantuml_code(selected_services, configurations)
                 st.code(plantuml_code, language="plantuml")
                 
                 # Download button for PlantUML code
@@ -697,56 +697,119 @@ class DiagramRenderer:
                 )
 
     @staticmethod
-    def _generate_simple_plantuml_code(selected_services: Dict, configurations: Dict) -> str:
-        """Generate simple PlantUML code without complex AWS icons"""
+    def _generate_working_plantuml_code(selected_services: Dict, configurations: Dict) -> str:
+        """Generate WORKING PlantUML code using simplified syntax without external dependencies"""
+        
+        # Define AWS colors
         plantuml_code = """@startuml
-!define AWSPREFIX https://raw.githubusercontent.com/awslabs/aws-icons-for-plantuml/v14.0/dist
-!includeurl AWSPREFIX/AWSCommon.puml
+!define AWSColor #FF9900
+!define EC2Color #EC7211
+!define LambdaColor #FF9900
+!define S3Color #3F8624
+!define RDSColor #277BB0
+!define KinesisColor #8B4789
+!define CloudFrontColor #C925D1
+!define VPCColor #232F3E
+
+skinparam rectangle {
+    BackgroundColor<<EC2>> EC2Color
+    BackgroundColor<<Lambda>> LambdaColor
+    BackgroundColor<<S3>> S3Color
+    BackgroundColor<<RDS>> RDSColor
+    BackgroundColor<<Kinesis>> KinesisColor
+    BackgroundColor<<CloudFront>> CloudFrontColor
+    BackgroundColor<<VPC>> VPCColor
+    BackgroundColor<<User>> #6B7280
+    BackgroundColor<<External>> #9CA3AF
+    BorderColor #232F3E
+    FontColor #FFFFFF
+    RoundCorner 10
+    Shadowing false
+}
+
+skinparam arrow {
+    Color #232F3E
+    FontColor #232F3E
+    FontSize 12
+}
 
 title AWS Architecture Diagram
 
-skinparam nodesep 10
-skinparam ranksep 10
+skinparam nodesep 20
+skinparam ranksep 20
 skinparam defaultTextAlignment center
-skinparam roundcorner 10
+skinparam roundcorner 15
 skinparam backgroundColor #FFFFFF
 skinparam shadowing false
 
-actor "User" as user
-rectangle "External Systems" as external
+' External entities
+rectangle "User" as user <<User>>
+rectangle "External Systems" as external <<External>>
 
-cloud AWS {
 """
         
-        # Add services by category
+        # Add services organized by category
+        all_services = []
+        service_nodes = {}
+        
         for category, services in selected_services.items():
             if services:
-                plantuml_code += f"  package \"{category}\" {{\n"
+                plantuml_code += f"rectangle \"{category}\" {{\n"
+                
                 for service in services:
                     config = configurations.get(service, {}).get('config', {})
                     config_text = ProfessionalArchitectureGenerator._get_config_summary(service, config)
-                    node_name = service.replace(" ", "").replace("Amazon", "").replace("AWS", "")
                     
-                    # Simple rectangle nodes for reliability
-                    plantuml_code += f'    node {node_name} [{service}\\n{config_text}]\n'
-                plantuml_code += "  }\n"
-        
-        plantuml_code += "}\n\n"
+                    # Create node name (sanitized)
+                    node_name = service.replace(" ", "").replace("Amazon", "").replace("AWS", "")
+                    service_nodes[service] = node_name
+                    
+                    # Determine service type for coloring
+                    service_type = "EC2"
+                    if "Lambda" in service:
+                        service_type = "Lambda"
+                    elif "S3" in service:
+                        service_type = "S3"
+                    elif "RDS" in service:
+                        service_type = "RDS"
+                    elif "Kinesis" in service:
+                        service_type = "Kinesis"
+                    elif "CloudFront" in service:
+                        service_type = "CloudFront"
+                    elif "VPC" in service:
+                        service_type = "VPC"
+                    
+                    display_name = service.replace("Amazon ", "").replace("AWS ", "")
+                    label = f"{display_name}\\n{config_text}" if config_text else display_name
+                    
+                    plantuml_code += f'    rectangle "{label}" as {node_name} <<{service_type}>>\n'
+                    all_services.append(service)
+                
+                plantuml_code += "}\n\n"
         
         # Add connections
-        all_services = []
-        for services in selected_services.values():
-            all_services.extend(services)
         all_services_with_external = ["User", "External"] + all_services
-        
         connections = ProfessionalArchitectureGenerator.generate_connections(all_services_with_external)
+        
+        plantuml_code += "' Service Connections\n"
         for conn in connections:
-            from_node = conn['from'].replace(" ", "").replace("Amazon", "").replace("AWS", "")
-            to_node = conn['to'].replace(" ", "").replace("Amazon", "").replace("AWS", "")
-            plantuml_code += f'{from_node} --> {to_node} : {conn["label"]}\n'
+            from_service = conn['from']
+            to_service = conn['to']
+            label = conn['label']
+            
+            # Map service names to node names
+            from_node = service_nodes.get(from_service, from_service.replace(" ", "").replace("Amazon", "").replace("AWS", ""))
+            to_node = service_nodes.get(to_service, to_service.replace(" ", "").replace("Amazon", "").replace("AWS", ""))
+            
+            plantuml_code += f'{from_node} --> {to_node} : {label}\n'
         
         plantuml_code += "@enduml"
         return plantuml_code
+
+    @staticmethod
+    def _generate_simple_plantuml_code(selected_services: Dict, configurations: Dict) -> str:
+        """Legacy method - kept for backward compatibility"""
+        return DiagramRenderer._generate_working_plantuml_code(selected_services, configurations)
 
     @staticmethod
     def _plantuml_simple_method(plantuml_code: str) -> Image:
